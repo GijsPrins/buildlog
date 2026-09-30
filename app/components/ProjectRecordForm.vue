@@ -1,0 +1,118 @@
+<script setup lang="ts">
+import type { ThemeConfig } from '~/types/domain'
+import type { ProjectEditorPhase } from '~/utils/projectEditor'
+import { copyTheme, projectThemePresets } from '~/utils/projectEditor'
+
+const props = defineProps<{
+  projectId?: string
+  mode: 'create' | 'edit'
+  backTo: string
+  backLabel: string
+  currentHeroUrl?: string
+  heroPreview?: string
+  busy?: boolean
+  errorMessage?: string
+  successMessage?: string
+}>()
+const emit = defineEmits<{ submit: []; heroSelected: [event: Event] }>()
+
+const name = defineModel<string>('name', { required: true })
+const projectSlug = defineModel<string>('projectSlug', { required: true })
+const subtitle = defineModel<string>('subtitle', { required: true })
+const description = defineModel<string>('description', { required: true })
+const startedStory = defineModel<string>('startedStory', { required: true })
+const motivationStory = defineModel<string>('motivationStory', { required: true })
+const objectStory = defineModel<string>('objectStory', { required: true })
+const isPublic = defineModel<boolean>('isPublic', { required: true })
+const itemsEnabled = defineModel<boolean>('itemsEnabled', { required: true })
+const costsEnabled = defineModel<boolean>('costsEnabled', { required: true })
+const currencyCode = defineModel<string>('currencyCode', { required: true })
+const theme = defineModel<ThemeConfig>('theme', { required: true })
+const phases = defineModel<ProjectEditorPhase[]>('phases', { required: true })
+const currentPhaseKey = defineModel<string | null>('currentPhaseKey', { required: true })
+
+const activePhases = computed(() => phases.value.filter(phase => !phase.archived))
+const projectStyle = computed(() => ({
+  '--project-primary': theme.value.colors.primary,
+  '--project-secondary': theme.value.colors.secondary,
+  '--project-accent': theme.value.colors.accent,
+  '--project-surface': theme.value.colors.surface,
+  '--project-border': theme.value.colors.border,
+  '--project-text': theme.value.colors.text,
+  '--project-muted': theme.value.colors.muted
+}))
+
+function applyPreset(preset: ThemeConfig) { theme.value = copyTheme(preset) }
+function addPhase() { phases.value = [...phases.value, { key: `new-${crypto.randomUUID()}`, id: null, name: 'New phase', archived: false }] }
+function movePhase(index: number, direction: -1 | 1) {
+  const target = index + direction
+  if (target < 0 || target >= phases.value.length) return
+  const next = [...phases.value]
+  const [entry] = next.splice(index, 1)
+  if (entry) next.splice(target, 0, entry)
+  phases.value = next
+}
+function archivePhase(phase: ProjectEditorPhase) {
+  phase.archived = !phase.archived
+  phases.value = [...phases.value]
+  if (phase.archived && currentPhaseKey.value === phase.key) currentPhaseKey.value = activePhases.value[0]?.key || null
+}
+</script>
+
+<template>
+  <form class="project-editor" :style="projectStyle" @submit.prevent="emit('submit')">
+    <div class="project-editor__bar">
+      <NuxtLink :to="backTo">← {{ backLabel }}</NuxtLink>
+      <strong>{{ mode === 'create' ? 'FORM PRJ-01' : 'FORM PRJ-02' }}</strong>
+      <span>{{ mode === 'create' ? 'New project record' : 'Master project record' }}</span>
+    </div>
+
+    <section class="project-editor__cover">
+      <div>
+        <p class="eyebrow">The object on the stand</p>
+        <textarea v-model="name" required maxlength="160" aria-label="Project name" placeholder="Name this build" />
+        <textarea v-model="subtitle" aria-label="Project subtitle" placeholder="One line that captures its character" />
+        <textarea v-model="description" aria-label="Project description" placeholder="What are you making or restoring?" />
+        <label><span>Workshop address</span><div>/projects/ <input v-model="projectSlug" required pattern="[a-z0-9]+(?:-[a-z0-9]+)*"></div></label>
+      </div>
+      <label class="project-editor__hero">
+        <input class="sr-only" type="file" accept="image/*" @change="emit('heroSelected', $event)">
+        <img v-if="heroPreview || currentHeroUrl" :src="heroPreview || currentHeroUrl" :alt="name || 'Project cover'">
+        <span><strong>{{ heroPreview || currentHeroUrl ? 'Replace cover photo' : 'Choose cover photo' }}</strong><small>The image that makes you want to get back to the bench</small></span>
+      </label>
+    </section>
+
+    <section class="project-editor__section">
+      <header class="builder-section-heading"><span>01</span><div><p class="eyebrow">Project anchor</p><h2>The story</h2></div><p>Keep the reason for the build close to the work itself.</p></header>
+      <div class="builder-story-grid"><article><span>01</span><label>How it started</label><textarea v-model="startedStory" placeholder="Where did you find it? What made you stop and look?" /></article><article><span>02</span><label>Why this build</label><textarea v-model="motivationStory" placeholder="What do you want to preserve, change or prove?" /></article><article><span>03</span><label>The object before us</label><textarea v-model="objectStory" placeholder="Known history, clues, scars — and what remains unknown." /></article></div>
+    </section>
+
+    <section class="project-editor__section">
+      <header class="builder-section-heading"><span>02</span><div><p class="eyebrow">Route across the bench</p><h2>Build phases</h2></div><p>Shape the route now; it can keep changing as the work develops.</p></header>
+      <div class="phase-editor">
+        <article v-for="(phase, index) in phases" :key="phase.key" :class="{ 'is-archived': phase.archived, 'is-current': currentPhaseKey === phase.key }"><strong>{{ String(index + 1).padStart(2, '0') }}</strong><input v-model="phase.name" required aria-label="Phase name"><div><button type="button" :disabled="index === 0" @click="movePhase(index, -1)">↑</button><button type="button" :disabled="index === phases.length - 1" @click="movePhase(index, 1)">↓</button><button type="button" @click="archivePhase(phase)">{{ phase.archived ? 'Restore' : 'Archive' }}</button></div></article>
+        <button class="phase-editor__add" type="button" @click="addPhase">+ Add project phase</button>
+        <label class="phase-editor__current"><span>Current stage on the work order</span><select v-model="currentPhaseKey"><option :value="null">Not set</option><option v-for="phase in activePhases" :key="phase.key" :value="phase.key">{{ phase.name }}</option></select></label>
+      </div>
+    </section>
+
+    <section class="project-editor__section">
+      <header class="builder-section-heading"><span>03</span><div><p class="eyebrow">Visual identity</p><h2>Workshop colours</h2></div><p>Start with a preset, then tune it to the actual object.</p></header>
+      <div class="theme-editor"><button v-for="preset in projectThemePresets" :key="preset.name" type="button" :class="{ current: theme.preset === preset.name }" :style="{ '--swatch-a': preset.config.colors.primary, '--swatch-b': preset.config.colors.accent, '--swatch-c': preset.config.colors.background }" @click="applyPreset(preset.config)"><i /><strong>{{ preset.label }}</strong><span>{{ preset.name }}</span></button><div class="theme-editor__custom"><label>Primary <input v-model="theme.colors.primary" type="color"></label><label>Accent <input v-model="theme.colors.accent" type="color"></label><label>Paper <input v-model="theme.colors.background" type="color"></label><label>Surface <input v-model="theme.colors.surface" type="color"></label><label>Heading <select v-model="theme.typography.heading"><option value="serif">Serif</option><option value="sans">Sans</option></select></label></div></div>
+    </section>
+
+    <section class="project-editor__section">
+      <header class="builder-section-heading"><span>04</span><div><p class="eyebrow">Workshop rules</p><h2>Record setup</h2></div><p>The buildlog can stay simple; enable only what earns its place.</p></header>
+      <div class="project-editor__settings"><label class="builder-toggle"><input v-model="isPublic" type="checkbox"><span><strong>Public project</strong><small>Anyone with the address can read the project.</small></span></label><label class="builder-toggle"><input v-model="itemsEnabled" type="checkbox"><span><strong>Parts &amp; materials</strong><small>Show the BOM and connect parts to work orders.</small></span></label><label class="builder-toggle" :class="{ disabled: !itemsEnabled }"><input v-model="costsEnabled" type="checkbox" :disabled="!itemsEnabled"><span><strong>Track costs</strong><small>Optional amounts appear only while enabled.</small></span></label><label class="field"><span>Currency</span><input v-model="currencyCode" maxlength="3" pattern="[A-Za-z]{3}"></label></div>
+    </section>
+
+    <ProjectMembers v-if="projectId && useDemoMode().value" :project-id="projectId" />
+    <section v-else class="project-editor__section project-editor__collaboration">
+      <header class="builder-section-heading"><span>05</span><div><p class="eyebrow">People around the bench</p><h2>Collaboration</h2></div><p>Roles belong to the project, not to the paperwork.</p></header>
+      <div><article><span>Owner</span><strong>{{ mode === 'create' ? 'You will control the master project record' : 'You control the master project record' }}</strong><small>Contributors can add workshop logs; readers can follow the build.</small></article><aside><strong>Add people after creating your project</strong><p>Save the project, then open Edit project to add contributors and readers to your workshop.</p></aside></div>
+    </section>
+
+    <p v-if="errorMessage" class="form-error">{{ errorMessage }}</p><p v-if="successMessage" class="form-success">{{ successMessage }}</p>
+    <footer class="builder-submit"><div><p class="eyebrow">{{ mode === 'create' ? 'New record' : 'Master record' }}</p><strong>{{ activePhases.length }} active phases · {{ itemsEnabled ? 'parts ledger on' : 'simple buildlog' }}</strong></div><div><NuxtLink class="button button--ghost" :to="backTo">Cancel</NuxtLink><button class="button" type="submit" :disabled="busy">{{ busy ? (mode === 'create' ? 'Putting it on the stand…' : 'Updating project…') : (mode === 'create' ? 'Put this build on the stand →' : 'Save project record →') }}</button></div></footer>
+  </form>
+</template>

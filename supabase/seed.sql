@@ -1,0 +1,2 @@
+-- Intentionally empty.
+-- Real Projects and Users are application data, not repository fixtures.

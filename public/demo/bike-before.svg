@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 760" role="img" aria-labelledby="title desc">
+  <title id="title">Vintage turquoise road bike before restoration</title>
+  <desc id="desc">A stylised workshop illustration of a dusty road bicycle.</desc>
+  <defs><linearGradient id="wall" x2="0" y2="1"><stop stop-color="#d9d2c5"/><stop offset="1" stop-color="#a79d8d"/></linearGradient><filter id="shadow"><feDropShadow dx="0" dy="14" stdDeviation="10" flood-opacity=".28"/></filter></defs>
+  <rect width="1200" height="760" fill="url(#wall)"/><path d="M0 590h1200v170H0z" fill="#665b4f"/><path d="M0 590h1200" stroke="#372f29" stroke-width="8"/>
+  <g opacity=".18" stroke="#fff" stroke-width="3"><path d="M80 0v590M310 0v590M540 0v590M770 0v590M1000 0v590"/><path d="M0 160h1200M0 330h1200M0 500h1200"/></g>
+  <g filter="url(#shadow)" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="322" cy="510" r="178" stroke="#242724" stroke-width="18"/><circle cx="879" cy="510" r="178" stroke="#242724" stroke-width="18"/>
+    <circle cx="322" cy="510" r="158" stroke="#b7b2a6" stroke-width="5"/><circle cx="879" cy="510" r="158" stroke="#b7b2a6" stroke-width="5"/>
+    <g stroke="#ddd7c9" stroke-width="2" opacity=".8"><path d="M322 352v316M164 510h316M879 352v316M721 510h316"/><path d="M210 398l224 224M210 622l224-224M767 398l224 224M767 622l224-224"/></g>
+    <g stroke="#267d78" stroke-width="22"><path d="M322 510l215-12 118-234 224 246M537 498l-94-213 212-21M322 510l121-225"/></g>
+    <g stroke="#1f2422" stroke-width="13"><path d="M655 264l72-64 76 2M443 285l-18-65M396 217h88"/><path d="M879 510l-103-286 56-44"/></g>
+    <circle cx="537" cy="498" r="45" stroke="#d2c9b9" stroke-width="9"/><path d="M537 498l77 32" stroke="#d2c9b9" stroke-width="8"/>
+  </g>
+  <g fill="#f0e1c2" opacity=".42"><circle cx="410" cy="358" r="11"/><circle cx="682" cy="292" r="8"/><circle cx="752" cy="448" r="14"/><circle cx="515" cy="470" r="7"/></g>
+</svg>
