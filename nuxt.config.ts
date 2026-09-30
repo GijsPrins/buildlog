@@ -2,6 +2,7 @@
 export default defineNuxtConfig({
   compatibilityDate: '2026-09-01',
   devtools: { enabled: true },
+  ssr: process.env.NUXT_STATIC_SITE !== 'true',
   css: ['~/assets/css/main.css'],
   runtimeConfig: {
     public: {

@@ -16,7 +16,8 @@ const completedProjects = computed(() => projects.value.filter(isCompleted))
 const totalMinutes = computed(() => projects.value.reduce((total, project) => total + (project.totalMinutes ?? 0), 0))
 const totalSessions = computed(() => projects.value.reduce((total, project) => total + (project.logCount ?? 0), 0))
 const canLog = computed(() => Boolean(user.value))
-const writableProjects = computed(() => projects.value.filter(project => !demoMode.value || useLocalAccounts().canWrite(project.id)))
+const writableProjectIds = ref<string[]>([])
+const writableProjects = computed(() => projects.value.filter(project => demoMode.value ? useLocalAccounts().canWrite(project.id) : writableProjectIds.value.includes(project.id)))
 const quickProjects = computed(() => { const active = writableProjects.value.filter(project => !isCompleted(project)); return active.length ? active : writableProjects.value })
 
 watch(user, () => { if (demoMode.value) projects.value = demo.listProjects() })
@@ -67,6 +68,11 @@ async function loadProjects() {
   }
 
   const baseProjects = (data ?? []) as Project[]
+  writableProjectIds.value = []
+  if (user.value) {
+    const { data: memberships } = await supabase.from('project_members').select('project_id').eq('user_id', user.value.id).in('role', ['owner', 'contributor'])
+    writableProjectIds.value = (memberships || []).map(entry => entry.project_id)
+  }
   if (!baseProjects.length) {
     projects.value = []
     loading.value = false
@@ -140,7 +146,7 @@ watch(() => user.value?.id, () => loadProjects())
 
     <section class="workshop-stats" aria-label="Workshop totals">
       <article><strong>{{ activeProjects.length }}</strong><span>Active {{ activeProjects.length === 1 ? 'project' : 'projects' }}</span></article>
-      <article><strong>{{ formatDuration(totalMinutes) }}</strong><span>Spent in workshop</span></article>
+      <article><strong>{{ totalMinutes ? formatDuration(totalMinutes) : '0h' }}</strong><span>Spent in workshop</span></article>
       <article><strong>{{ totalSessions }}</strong><span>{{ totalSessions === 1 ? 'Session' : 'Sessions' }} logged</span></article>
     </section>
 

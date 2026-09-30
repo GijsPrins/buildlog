@@ -19,6 +19,7 @@ export function useAuth() {
 
     const { data } = await supabase.auth.getUser()
     liveUser.value = data.user
+    if (import.meta.client && data.user) await supabase.rpc('accept_workshop_invitations')
     ready.value = true
 
     if (import.meta.client && !listenerBound.value) {
@@ -26,6 +27,8 @@ export function useAuth() {
       supabase.auth.onAuthStateChange((_event, session) => {
         liveUser.value = session?.user ?? null
         ready.value = true
+        // Supabase auth callbacks must not await another Supabase request.
+        if (session?.user && _event === 'SIGNED_IN') setTimeout(() => { void supabase.rpc('accept_workshop_invitations') }, 0)
       })
     }
   }

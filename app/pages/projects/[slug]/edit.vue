@@ -39,7 +39,7 @@ function applyProject(projectData: Project, phaseData: ProjectPhase[], heroUrl =
   startedStory.value = projectData.started_story || ''; motivationStory.value = projectData.motivation_story || ''; objectStory.value = projectData.object_story || ''
   isPublic.value = projectData.is_public; itemsEnabled.value = projectData.items_enabled; costsEnabled.value = projectData.cost_tracking_enabled
   currencyCode.value = projectData.currency_code; theme.value = copyTheme(projectData.theme_config); currentHeroUrl.value = heroUrl
-  phases.value = phaseData.map(phase => ({ key: phase.id, id: phase.id, name: phase.name, archived: false }))
+  phases.value = phaseData.map(phase => ({ key: phase.id, id: phase.id, name: phase.name, archived: Boolean(phase.archived_at) }))
   currentPhaseKey.value = projectData.current_phase_id
 }
 
@@ -57,7 +57,7 @@ async function loadProject() {
   ])
   if (error || !projectData || !userData.user) { errorMessage.value = error?.message || 'Project unavailable.'; loading.value = false; return }
   const [{ data: phaseData }, { data: membershipData }, { data: imageData }] = await Promise.all([
-    supabase.from('project_phases').select('*').eq('project_id', projectData.id).is('archived_at', null).order('sort_order'),
+    supabase.from('project_phases').select('*').eq('project_id', projectData.id).order('sort_order'),
     supabase.from('project_members').select('project_id,user_id,role').eq('project_id', projectData.id).eq('user_id', userData.user.id).maybeSingle(),
     projectData.hero_image_id ? supabase.from('project_images').select('*').eq('id', projectData.hero_image_id).maybeSingle() : Promise.resolve({ data: null })
   ])

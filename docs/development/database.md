@@ -49,6 +49,8 @@ function they protect. A migration is not complete until `test db` and
 
 ## Current verification status
 
-The initial migration and pgTAP file pass a PostgreSQL 17 parser check. Runtime
-execution is pending because the current workstation does not expose a Docker
-runtime or local PostgreSQL on port `54322`.
+The migrations are deployed to the live Buildlog project. On 30 September 2026,
+the 19 original pgTAP assertions and 22 live account assertions passed in
+rollback-only transactions on PostgreSQL 17. The live API smoke test also passed;
+see [live verification](supabase-live.md). A fresh local Docker `db reset` has
+not been run because this workstation has no available Docker runtime.

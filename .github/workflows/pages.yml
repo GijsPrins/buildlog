@@ -1,0 +1,54 @@
+name: Publish workshop to GitHub Pages
+
+# Manual only: enabling Pages and publishing remain an explicit choice.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.19.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test && pnpm typecheck
+      - uses: actions/configure-pages@v5
+      - name: Build static workshop
+        env:
+          NUXT_STATIC_SITE: 'true'
+          NUXT_APP_BASE_URL: /buildlog/
+          NUXT_PUBLIC_SUPABASE_URL: ${{ vars.NUXT_PUBLIC_SUPABASE_URL }}
+          NUXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ vars.NUXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          test -n "$NUXT_PUBLIC_SUPABASE_URL" && test -n "$NUXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"
+          pnpm generate
+          cp .output/public/index.html .output/public/404.html
+          touch .output/public/.nojekyll
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: .output/public
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4

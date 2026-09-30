@@ -1,5 +1,6 @@
 <script setup lang="ts">
 const route = useRoute()
+const workshopPhoto = `${useRuntimeConfig().app.baseURL}demo/gios-start.jpeg`
 const configured = useSupabaseConfigured()
 const local = useLocalAccounts()
 const destination = computed(() => typeof route.query.redirect === 'string' && route.query.redirect.startsWith('/') && !route.query.redirect.startsWith('//') ? route.query.redirect : '/')
@@ -8,7 +9,7 @@ const displayName = ref('')
 const email = ref('')
 const password = ref('')
 const showPassword = ref(false)
-watch(mode, () => { errorMessage.value = ''; successMessage.value = ''; password.value = ''; showPassword.value = false })
+function switchMode(next: 'signin' | 'signup') { mode.value = next; errorMessage.value = ''; successMessage.value = ''; password.value = ''; showPassword.value = false }
 const busy = ref(false)
 const errorMessage = ref('')
 const successMessage = ref('')
@@ -38,7 +39,7 @@ async function submit() {
     const { data, error } = await supabase.auth.signUp({
       email: email.value,
       password: password.value,
-      options: { data: { display_name: displayName.value.trim() } }
+      options: { data: { display_name: displayName.value.trim() }, emailRedirectTo: `${window.location.origin}${useRuntimeConfig().app.baseURL}` }
     })
 
     if (error) {
@@ -47,7 +48,9 @@ async function submit() {
       successMessage.value = 'Check your email to confirm your account, then sign in.'
       mode.value = 'signin'
     } else {
-      await navigateTo(typeof route.query.redirect === 'string' ? route.query.redirect : '/')
+      await supabase.rpc('accept_workshop_invitations')
+      await useAuth().initialize()
+      await navigateTo(destination.value)
     }
   } else {
     const { error } = await supabase.auth.signInWithPassword({
@@ -58,7 +61,9 @@ async function submit() {
     if (error) {
       errorMessage.value = error.message
     } else {
-      await navigateTo(typeof route.query.redirect === 'string' ? route.query.redirect : '/')
+      await supabase.rpc('accept_workshop_invitations')
+      await useAuth().initialize()
+      await navigateTo(destination.value)
     }
   }
 
@@ -80,7 +85,7 @@ async function submit() {
         <h1>{{ mode === 'signin' ? 'Back to\nthe workshop.' : 'Make room\nfor your build.' }}</h1>
         <p>{{ mode === 'signin' ? 'Your projects, your notes, your next good idea. Pick up where you left off.' : 'Give your project a home. Start with an object, a photo, or a story worth keeping.' }}</p>
         <figure class="workshop-access__photo">
-          <img src="/demo/gios-start.jpeg" alt="Ivory Gios Torino bicycle waiting for its next workshop session">
+          <img :src="workshopPhoto" alt="Ivory Gios Torino bicycle waiting for its next workshop session">
           <figcaption>From the workshop / Gios Torino</figcaption>
         </figure>
         <div class="workshop-access__stamp" aria-hidden="true"><span>Buildlog</span><strong>Made by hand</strong><span>Keep the story</span></div>
@@ -90,8 +95,8 @@ async function submit() {
       <section class="workshop-access__paper" aria-labelledby="access-heading">
         <div class="workshop-access__ticket-head"><span>Workshop membership</span><span>{{ mode === 'signin' ? 'Returning builder' : 'New builder' }}</span></div>
         <div class="workshop-access__tabs" aria-label="Account action">
-          <button type="button" :class="{ current: mode === 'signin' }" :aria-pressed="mode === 'signin'" :disabled="busy" @click="mode = 'signin'">Sign in</button>
-          <button type="button" :class="{ current: mode === 'signup' }" :aria-pressed="mode === 'signup'" :disabled="busy" @click="mode = 'signup'">Create account</button>
+          <button type="button" :class="{ current: mode === 'signin' }" :aria-pressed="mode === 'signin'" :disabled="busy" @click="switchMode('signin')">Sign in</button>
+          <button type="button" :class="{ current: mode === 'signup' }" :aria-pressed="mode === 'signup'" :disabled="busy" @click="switchMode('signup')">Create account</button>
         </div>
         <header>
           <p class="eyebrow">{{ mode === 'signin' ? 'Your bench is waiting' : 'Issue a new workshop pass' }}</p>
@@ -124,7 +129,7 @@ async function submit() {
 
         <div class="workshop-access__switch">
           <span>{{ mode === 'signin' ? 'First time at the bench?' : 'Already have a workshop pass?' }}</span>
-          <button type="button" :disabled="busy" @click="mode = mode === 'signin' ? 'signup' : 'signin'">{{ mode === 'signin' ? 'Create an account' : 'Sign in instead' }}</button>
+          <button type="button" :disabled="busy" @click="switchMode(mode === 'signin' ? 'signup' : 'signin')">{{ mode === 'signin' ? 'Create an account' : 'Sign in instead' }}</button>
         </div>
 
         <details v-if="!configured" class="workshop-access__demo">
