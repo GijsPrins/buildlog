@@ -61,6 +61,9 @@ const storyChapters = computed(() => project.value ? [
 ] : [])
 const hasStory = computed(() => storyChapters.value.some(chapter => chapter.text))
 const projectStyle = computed(() => ({
+  '--project-background': project.value?.theme_config?.colors?.background || '#f3f0e9',
+  '--project-radius': { none: '0px', small: '4px', medium: '14px' }[project.value?.theme_config?.shape?.radius || 'small'],
+  '--project-shadow': project.value?.theme_config?.shape?.shadow === 'none' ? 'none' : '8px 8px 0 #00000014',
   '--project-primary': project.value?.theme_config?.colors?.primary || '#123f36',
   '--project-secondary': project.value?.theme_config?.colors?.secondary || '#596b8c',
   '--project-accent': project.value?.theme_config?.colors?.accent || '#e27143',
@@ -168,7 +171,7 @@ onMounted(loadProject)
     <p>{{ errorMessage }}</p>
     <NuxtLink class="button" to="/">Back to projects</NuxtLink>
   </div>
-  <div v-else-if="project" class="project-workshop" :class="`theme--${project.theme_config.preset}`" :style="projectStyle">
+  <div v-else-if="project" class="project-workshop" :class="[`theme--${project.theme_config.preset}`, `project-texture--${project.theme_config.decoration?.texture || 'none'}`, `project-frame--${project.theme_config.decoration?.imageFrame || 'none'}`]" :style="projectStyle">
     <section class="project-work-order">
       <div class="project-work-order__bar">
         <NuxtLink to="/">← Workshop board</NuxtLink>

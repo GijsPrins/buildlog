@@ -30,9 +30,28 @@ const currencyCode = defineModel<string>('currencyCode', { required: true })
 const theme = defineModel<ThemeConfig>('theme', { required: true })
 const phases = defineModel<ProjectEditorPhase[]>('phases', { required: true })
 const currentPhaseKey = defineModel<string | null>('currentPhaseKey', { required: true })
+const themeLibrary = useThemeLibrary()
+const themeLibraryError = ref('')
+const themeLibraryName = ref('')
+const themeLibraryBusy = ref(false)
+const themeLibraryMessage = ref('')
+async function savePalette() {
+  themeLibraryError.value = ''; themeLibraryMessage.value = ''; themeLibraryBusy.value = true
+  try {
+    const id = await themeLibrary.save(null, themeLibraryName.value, theme.value)
+    theme.value = copyTheme(theme.value); theme.value.preset = `custom-${id}`
+    themeLibraryMessage.value = 'Palette saved in your theme library.'
+  } catch (cause) { themeLibraryError.value = cause instanceof Error ? cause.message : 'Could not save this palette.' }
+  finally { themeLibraryBusy.value = false }
+}
+onMounted(async () => { try { await themeLibrary.load() } catch (cause) { themeLibraryError.value = cause instanceof Error ? cause.message : 'Could not load saved themes.' } })
 
 const activePhases = computed(() => phases.value.filter(phase => !phase.archived))
 const projectStyle = computed(() => ({
+  '--project-background': theme.value.colors.background,
+  '--project-heading': theme.value.typography.heading === 'serif' ? 'Georgia, serif' : 'Arial, sans-serif',
+  '--project-radius': { none: '0px', small: '4px', medium: '14px' }[theme.value.shape.radius],
+  '--project-shadow': theme.value.shape.shadow === 'subtle' ? '8px 8px 0 #00000014' : 'none',
   '--project-primary': theme.value.colors.primary,
   '--project-secondary': theme.value.colors.secondary,
   '--project-accent': theme.value.colors.accent,
@@ -60,7 +79,7 @@ function archivePhase(phase: ProjectEditorPhase) {
 </script>
 
 <template>
-  <form class="project-editor" :style="projectStyle" @submit.prevent="emit('submit')">
+  <form class="project-editor" :class="[`project-texture--${theme.decoration.texture}`, `project-frame--${theme.decoration.imageFrame}`]" :style="projectStyle" @submit.prevent="emit('submit')">
     <div class="project-editor__bar">
       <NuxtLink :to="backTo">← {{ backLabel }}</NuxtLink>
       <strong>{{ mode === 'create' ? 'FORM PRJ-01' : 'FORM PRJ-02' }}</strong>
@@ -98,7 +117,13 @@ function archivePhase(phase: ProjectEditorPhase) {
 
     <section class="project-editor__section">
       <header class="builder-section-heading"><span>03</span><div><p class="eyebrow">Visual identity</p><h2>Workshop colours</h2></div><p>Start with a preset, then tune it to the actual object.</p></header>
-      <div class="theme-editor"><button v-for="preset in projectThemePresets" :key="preset.name" type="button" :class="{ current: theme.preset === preset.name }" :style="{ '--swatch-a': preset.config.colors.primary, '--swatch-b': preset.config.colors.accent, '--swatch-c': preset.config.colors.background }" @click="applyPreset(preset.config)"><i /><strong>{{ preset.label }}</strong><span>{{ preset.name }}</span></button><div class="theme-editor__custom"><label>Primary <input v-model="theme.colors.primary" type="color"></label><label>Accent <input v-model="theme.colors.accent" type="color"></label><label>Paper <input v-model="theme.colors.background" type="color"></label><label>Surface <input v-model="theme.colors.surface" type="color"></label><label>Heading <select v-model="theme.typography.heading"><option value="serif">Serif</option><option value="sans">Sans</option></select></label></div></div>
+      <p><NuxtLink to="/themes">Manage your theme library →</NuxtLink></p>
+      <p v-if="themeLibraryError" class="form-error" role="alert">{{ themeLibraryError }}</p>
+      <div v-if="themeLibrary.themes.value.length" class="theme-editor"><button v-for="entry in themeLibrary.themes.value" :key="entry.id" type="button" :class="{ current: theme.preset === entry.config.preset }" :style="{ '--swatch-a': entry.config.colors.primary, '--swatch-b': entry.config.colors.accent, '--swatch-c': entry.config.colors.background }" @click="applyPreset(entry.config)"><i /><strong>{{ entry.name }}</strong><span>Your library</span></button></div>
+      <div class="theme-editor"><button v-for="preset in projectThemePresets" :key="preset.name" type="button" :class="{ current: theme.preset === preset.name }" :style="{ '--swatch-a': preset.config.colors.primary, '--swatch-b': preset.config.colors.accent, '--swatch-c': preset.config.colors.background }" @click="applyPreset(preset.config)"><i /><strong>{{ preset.label }}</strong><span>{{ preset.name }}</span></button></div>
+      <ThemeControls v-model="theme" />
+      <div class="form-actions"><label class="field"><span>Keep this palette for another build</span><input v-model="themeLibraryName" maxlength="80" placeholder="Name this palette" :disabled="themeLibraryBusy"></label><button class="button button--ghost" type="button" :disabled="themeLibraryBusy || !themeLibraryName.trim()" @click="savePalette">{{ themeLibraryBusy ? 'Saving palette…' : 'Save to theme library' }}</button></div>
+      <p v-if="themeLibraryMessage" role="status">{{ themeLibraryMessage }}</p>
     </section>
 
     <section class="project-editor__section">

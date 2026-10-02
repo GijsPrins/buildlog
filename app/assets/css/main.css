@@ -187,7 +187,15 @@ img { display: block; max-width: 100%; }
 .project-hero__meta span { padding: 0.45rem 0.75rem; border: 1px solid rgb(255 255 255 / 35%); border-radius: 999px; background: rgb(0 0 0 / 10%); font-size: 0.8rem; }
 
 .project-workshop { margin-top: -1.5rem; color: var(--project-text); }
-.project-workshop .button { border-color: var(--project-primary); border-radius: 0.15rem; background: var(--project-primary); }
+.project-workshop, .project-editor { background-color: var(--project-background, transparent); }
+.project-workshop .project-work-order, .project-editor .project-editor__cover { border-radius: var(--project-radius, 0px); overflow: hidden; box-shadow: var(--project-shadow, none); }
+.project-workshop .button { border-radius: var(--project-radius, 0px); }
+.project-texture--none .project-work-order__copy, .project-texture--none .project-editor__cover > div { background-image: none; }
+.project-texture--grid .project-work-order__copy, .project-texture--grid .project-editor__cover > div { background-image: linear-gradient(var(--project-border) 1px, transparent 1px), linear-gradient(90deg, var(--project-border) 1px, transparent 1px); background-size: 28px 28px; }
+.project-texture--paper .project-work-order__copy, .project-texture--paper .project-editor__cover > div { background-image: repeating-linear-gradient(11deg, #00000004 0 1px, transparent 1px 5px); background-size: auto; }
+.project-frame--bordered .project-work-order__visual img, .project-frame--bordered .project-editor__hero img { border: 8px solid var(--project-surface); }
+.project-frame--print .project-work-order__visual img, .project-frame--print .project-editor__hero img { border: 12px solid var(--project-surface); border-bottom-width: 30px; }
+.project-workshop .button { border-color: var(--project-primary); border-radius: var(--project-radius, 0.15rem); background: var(--project-primary); }
 .project-workshop .button:hover { background: color-mix(in srgb, var(--project-primary), #fff 10%); }
 .project-work-order { border: 1px solid color-mix(in srgb, var(--project-primary), #222 34%); background: var(--project-surface); box-shadow: 10px 10px 0 color-mix(in srgb, var(--project-primary), transparent 78%); }
 .project-work-order__bar { display: flex; min-height: 2.6rem; padding: 0.6rem 0.8rem; align-items: center; justify-content: space-between; gap: 1rem; background: #202a27; color: #dce4e1; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 0.65rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; }
@@ -656,7 +664,9 @@ img { display: block; max-width: 100%; }
 @media (max-width: 820px) {
   .hero { grid-template-columns: 1fr; gap: 1.5rem; padding-top: 2rem; }
   .project-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .site-nav > a:not(.button) { display: none; }
+  .site-header__inner { flex-wrap: wrap; }
+  .site-nav { flex-wrap: wrap; justify-content: flex-end; }
+  .site-nav > a:not(.button) { padding: 0.4rem; font-size: 0.8rem; }
   .workshop-board-header { display: grid; align-items: start; }
   .quick-log { width: 100%; }
   .stand-grid { grid-template-columns: 1fr; }
