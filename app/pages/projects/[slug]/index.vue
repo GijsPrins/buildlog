@@ -188,6 +188,7 @@ onMounted(loadProject)
             <NuxtLink v-if="isOwner" class="button button--ghost project-work-order__edit" :to="`/projects/${project.slug}/edit`">Edit project</NuxtLink>
             <a class="project-work-order__jump" href="#build-log">View workshop sessions ↓</a>
           </div>
+          <CopyProjectTheme v-if="!isOwner" :key="project.id" :theme="project.theme_config" :project-name="project.name" />
         </div>
 
         <figure class="project-work-order__visual">

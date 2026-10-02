@@ -40,4 +40,20 @@ describe('local theme library', () => {
     user.value = null
     await expect(library.save(null,'Palette',defaultProjectTheme())).rejects.toThrow('Sign in')
   })
+  it('copies another builders project theme into an independent personal palette', async () => {
+    const original = defaultProjectTheme()
+    original.preset = 'custom-another-builder'
+    const snapshot = JSON.stringify(original)
+    user.value = { id: 'inspired-builder' }
+    const library = useThemeLibrary()
+    const id = await library.save(null,'Inspired by the Gios',original)
+    expect(library.themes.value[0]?.config.colors).toEqual(original.colors)
+    expect(library.themes.value[0]?.config.preset).toBe(`custom-${id}`)
+    expect(JSON.stringify(original)).toBe(snapshot)
+    const changed = structuredClone(original); changed.colors.primary = '#ffffff'
+    await library.save(id,'My own version',changed)
+    expect(original.colors.primary).toBe('#123f36')
+    user.value = { id: 'theme-owner' }; await library.load()
+    expect(library.themes.value).toHaveLength(0)
+  })
 })
