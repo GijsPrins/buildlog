@@ -36,7 +36,8 @@ jobs:
           NUXT_PUBLIC_SUPABASE_URL: ${{ vars.NUXT_PUBLIC_SUPABASE_URL }}
           NUXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ vars.NUXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
         run: |
-          test -n "$NUXT_PUBLIC_SUPABASE_URL" && test -n "$NUXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"
+          : "${NUXT_PUBLIC_SUPABASE_URL:?Set the NUXT_PUBLIC_SUPABASE_URL repository variable}"
+          : "${NUXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:?Set the NUXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY repository variable}"
           pnpm generate
           cp .output/public/index.html .output/public/404.html
           touch .output/public/.nojekyll
