@@ -1,7 +1,8 @@
 name: Publish workshop to GitHub Pages
 
-# Manual only: enabling Pages and publishing remain an explicit choice.
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
 
 permissions:

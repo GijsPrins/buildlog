@@ -126,6 +126,7 @@ async function submit() {
           <p v-if="successMessage" class="form-success" role="status">{{ successMessage }}</p>
           <button class="button workshop-access__submit" type="submit" :disabled="busy">{{ busy ? 'Opening the workshop…' : mode === 'signin' ? 'Sign in →' : 'Create my workshop account →' }}</button>
         </form>
+        <p v-if="configured"><NuxtLink to="/reset-password">Forgot your password?</NuxtLink></p>
 
         <div class="workshop-access__switch">
           <span>{{ mode === 'signin' ? 'First time at the bench?' : 'Already have a workshop pass?' }}</span>
