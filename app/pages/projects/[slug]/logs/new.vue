@@ -21,9 +21,7 @@ const summary = ref('')
 const content = ref('')
 const finding = ref('')
 const decision = ref('')
-const imageRole = ref<ImageRole>('gallery')
-const files = ref<File[]>([])
-const photoPreviews = ref<string[]>([])
+const { photos, files, selectFiles, removeFile } = useLogPhotos()
 const busy = ref(false)
 const loading = ref(true)
 const errorMessage = ref('')
@@ -102,20 +100,6 @@ async function loadProject() {
   loading.value = false
 }
 
-function selectFiles(event: Event) {
-  const input = event.target as HTMLInputElement
-  for (const preview of photoPreviews.value) URL.revokeObjectURL(preview)
-  files.value = Array.from(input.files ?? [])
-  photoPreviews.value = files.value.map(file => URL.createObjectURL(file))
-}
-
-function removeFile(index: number) {
-  const preview = photoPreviews.value[index]
-  if (preview) URL.revokeObjectURL(preview)
-  files.value.splice(index, 1)
-  photoPreviews.value.splice(index, 1)
-}
-
 function fileAsDataUrl(file: File) {
   return new Promise<string>((resolve, reject) => {
     const reader = new FileReader()
@@ -134,7 +118,7 @@ async function saveDemoLog() {
   const demoImages = []
   for (const [index, file] of files.value.entries()) {
     uploadProgress.value[index] = `Saving ${file.name} locally…`
-    demoImages.push({ name: file.name, type: file.type || 'image/jpeg', size: file.size, dataUrl: await fileAsDataUrl(file) })
+    demoImages.push({ name: file.name, type: file.type || 'image/jpeg', size: file.size, role: photos.value[index]!.role, caption: photos.value[index]!.caption.trim() || null, dataUrl: await fileAsDataUrl(file) })
   }
   const duration = Math.max(0, (durationHours.value ?? 0) * 60 + (durationMinutes.value ?? 0)) || null
   demo.addLog({
@@ -148,7 +132,7 @@ async function saveDemoLog() {
     findingDecisions: finding.value.trim() || decision.value.trim()
       ? [{ finding: finding.value.trim(), decision: decision.value.trim() }]
       : [],
-    imageRole: imageRole.value,
+    imageRole: 'gallery',
     images: demoImages,
     itemUsage: projectItems.value.filter(entry => selectedItems.value[entry.id]).map(entry => ({
       projectItemId: entry.id, usageAmount: itemAmounts.value[entry.id] ?? null,
@@ -171,7 +155,8 @@ async function uploadOriginals(logId: string, userId: string) {
         original_file_name: file.name,
         media_type: file.type || 'image/jpeg',
         byte_size: file.size,
-        role: imageRole.value,
+        role: photos.value[index]!.role,
+        caption: photos.value[index]!.caption.trim() || null,
         sort_order: index,
         upload_status: 'reserved',
         uploaded_by_user_id: userId
@@ -289,9 +274,6 @@ async function submit() {
 }
 
 onMounted(loadProject)
-onBeforeUnmount(() => {
-  for (const preview of photoPreviews.value) URL.revokeObjectURL(preview)
-})
 </script>
 
 <template>
@@ -321,36 +303,12 @@ onBeforeUnmount(() => {
         </div>
 
         <div class="session-photo-board">
-          <input id="photos" class="sr-only" type="file" accept="image/*" multiple @change="selectFiles">
-          <label v-if="!photoPreviews.length" class="session-photo-empty" for="photos">
-            <span>+ Add workshop photos</span>
-            <strong>Show the work, not just the result</strong>
-            <small>Parts on the bench, details, damage, measurements — whatever tells the session.</small>
-          </label>
-          <div v-else class="session-photo-grid">
-            <figure v-for="(preview, index) in photoPreviews" :key="preview" :class="{ 'is-primary': index === 0 }">
-              <img :src="preview" :alt="files[index]?.name || `Workshop photo ${index + 1}`">
-              <figcaption>
-                <span>{{ files[index]?.name }}</span>
-                <button type="button" :aria-label="`Remove ${files[index]?.name}`" @click="removeFile(index)">×</button>
-              </figcaption>
-            </figure>
-            <label class="session-photo-add" for="photos">+ Add or replace photos</label>
+          <input id="photos" class="sr-only" type="file" accept="image/*" multiple :disabled="busy" @change="selectFiles">
+          <div class="log-photo-list">
+            <LogPhotoEditor v-for="(photo, index) in photos" :key="photo.preview" v-model:caption="photo.caption" v-model:role="photo.role" :src="photo.preview" :name="photo.file.name" :disabled="busy" @remove="removeFile(index)" />
           </div>
-          <div v-if="files.length" class="session-photo-options">
-            <label for="image-role">These photos show</label>
-            <select id="image-role" v-model="imageRole">
-              <option value="gallery">The session in general</option>
-              <option value="before">Before</option>
-              <option value="after">After</option>
-              <option value="damage">Damage</option>
-              <option value="identification">Identification</option>
-              <option value="detail">A detail</option>
-              <option value="process">The process</option>
-            </select>
-            <small v-if="demoMode">Stored in this browser · 2.5 MB total maximum</small>
-            <small v-else>Originals are stored unchanged</small>
-          </div>
+          <label class="session-photo-add" for="photos">{{ photos.length ? '+ Add more photos' : '+ Add workshop photos' }}</label>
+          <div class="session-photo-options"><small>{{ demoMode ? 'Stored in this browser · 2.5 MB total maximum' : 'Originals are stored unchanged' }}</small></div>
         </div>
       </section>
 

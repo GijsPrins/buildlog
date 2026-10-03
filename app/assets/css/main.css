@@ -330,6 +330,9 @@ img { display: block; max-width: 100%; }
 .session-summary-input { min-height: 5rem; padding-top: 1rem; border-top: 1px solid var(--project-border); color: var(--project-muted); font-family: var(--work-order-type); font-size: 1rem; line-height: 1.55; }
 .session-lead__nudge { margin: 1rem 0 0; color: var(--project-muted); font-family: var(--work-order-type); font-size: 0.64rem; line-height: 1.5; text-transform: uppercase; }
 .session-photo-board { position: relative; display: flex; min-height: 30rem; flex-direction: column; background: var(--project-primary); }
+.log-photo-list { display: grid; gap: 1rem; }
+.log-photo-section .log-photo-list { grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr)); }
+.log-photo-section { margin: 2rem 0; }
 .session-photo-empty { display: grid; flex: 1; padding: 2rem; place-content: center; border: 1px dashed rgb(255 255 255 / 40%); margin: 1rem; color: white; cursor: pointer; text-align: center; }
 .session-photo-empty > span { justify-self: center; padding: 0.5rem 0.65rem; border: 1px solid rgb(255 255 255 / 45%); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 0.65rem; text-transform: uppercase; }
 .session-photo-empty strong { max-width: 12ch; margin: 1.2rem auto 0.7rem; font-family: var(--project-heading); font-size: clamp(2rem, 4vw, 3rem); font-weight: 500; line-height: 1; }

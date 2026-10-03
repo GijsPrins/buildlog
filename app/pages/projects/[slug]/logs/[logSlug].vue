@@ -30,9 +30,8 @@ const itemAmounts = ref<Record<string, number | null>>({})
 const itemNotes = ref<Record<string, string>>({})
 const itemStatuses = ref<Record<string, ProjectItemStatus | ''>>({})
 const removedImageIds = ref<string[]>([])
-const files = ref<File[]>([])
-const filePreviews = ref<string[]>([])
-const imageRole = ref<ImageRole>('process')
+const { photos, files, selectFiles, removeFile, clearPhotos } = useLogPhotos()
+const imageEdits = ref<Array<ProjectImage & { signedUrl?: string }>>([])
 const demoMode = useDemoMode()
 const demo = useDemoStore()
 
@@ -62,6 +61,8 @@ function fillForm() {
     itemNotes.value[entry.project_item_id] = entry.note || ''
   }
   removedImageIds.value = []
+  imageEdits.value = images.value.map(image => ({ ...image }))
+  clearPhotos()
 }
 
 async function loadDetail() {
@@ -110,11 +111,6 @@ async function loadDetail() {
   fillForm(); loading.value = false
 }
 
-function selectFiles(event: Event) {
-  const input = event.target as HTMLInputElement
-  for (const url of filePreviews.value) URL.revokeObjectURL(url)
-  files.value = Array.from(input.files ?? []); filePreviews.value = files.value.map(file => URL.createObjectURL(file))
-}
 function toggleRemoveImage(imageId: string) {
   removedImageIds.value = removedImageIds.value.includes(imageId) ? removedImageIds.value.filter(id => id !== imageId) : [...removedImageIds.value, imageId]
 }
@@ -132,7 +128,7 @@ async function uploadNewImages(userId: string) {
   for (const [index, file] of files.value.entries()) {
     const { data: reservation, error } = await supabase.from('project_images').insert({
       project_id: project.value!.id, log_id: log.value!.id, original_file_name: file.name,
-      media_type: file.type || 'image/jpeg', byte_size: file.size, role: imageRole.value,
+      media_type: file.type || 'image/jpeg', byte_size: file.size, role: photos.value[index]!.role, caption: photos.value[index]!.caption.trim() || null,
       sort_order: images.value.length + index, upload_status: 'reserved', uploaded_by_user_id: userId
     }).select('id,storage_path').single()
     if (error || !reservation) throw error || new Error(`Could not reserve ${file.name}`)
@@ -152,10 +148,10 @@ async function save() {
   try {
     if (demoMode.value) {
       const newImages = []
-      for (const file of files.value) newImages.push({ name: file.name, type: file.type || 'image/jpeg', size: file.size, dataUrl: await fileAsDataUrl(file) })
+      for (const [index, file] of files.value.entries()) newImages.push({ name: file.name, type: file.type || 'image/jpeg', size: file.size, role: photos.value[index]!.role, caption: photos.value[index]!.caption.trim() || null, dataUrl: await fileAsDataUrl(file) })
       demo.updateLog({ logId: log.value.id, phaseId: phaseId.value || null, title: title.value.trim(), workDate: workDate.value,
         durationMinutes: duration, summary: summary.value.trim(), content: content.value.trim(), findingDecisions,
-        imageRole: imageRole.value, newImages, removedImageIds: removedImageIds.value, itemUsage: usageInput() })
+        imageRole: 'gallery', imageEdits: imageEdits.value.map(image => ({ id: image.id, role: image.role, caption: image.caption?.trim() || null })), newImages, removedImageIds: removedImageIds.value, itemUsage: usageInput() })
     } else {
       const supabase = useSupabase()!
       const { data: userData } = await supabase.auth.getUser()
@@ -178,16 +174,20 @@ async function save() {
         const { error } = await supabase.from('project_images').update({ deleted_at: new Date().toISOString() }).in('id', removedImageIds.value).eq('project_id', project.value.id)
         if (error) throw error
       }
+      for (const image of imageEdits.value.filter(image => !removedImageIds.value.includes(image.id))) {
+        const { error } = await supabase.from('project_images').update({ role: image.role, caption: image.caption?.trim() || null }).eq('id', image.id).eq('log_id', log.value.id).eq('project_id', project.value.id)
+        if (error) throw error
+      }
       await uploadNewImages(userData.user.id)
     }
-    editing.value = false; files.value = []; await navigateTo(`/projects/${slug.value}/logs/${logSlug.value}`, { replace: true }); await loadDetail()
+    editing.value = false; clearPhotos(); await navigateTo(`/projects/${slug.value}/logs/${logSlug.value}`, { replace: true }); await loadDetail()
   } catch (error) { errorMessage.value = error instanceof Error ? error.message : 'The work order could not be updated.' }
   finally { busy.value = false }
 }
 
 onMounted(loadDetail)
 watch(() => route.query.edit, value => { editing.value = value === '1'; if (editing.value) fillForm() })
-onBeforeUnmount(() => { for (const url of filePreviews.value) URL.revokeObjectURL(url) })
+
 </script>
 
 <template>
@@ -220,7 +220,15 @@ onBeforeUnmount(() => { for (const url of filePreviews.value) URL.revokeObjectUR
         <label class="field"><span>Finding</span><textarea v-model="finding" /></label><label class="field"><span>Decision</span><textarea v-model="decision" /></label>
       </div>
       <section v-if="project.items_enabled" class="log-edit__parts"><h2>Parts used</h2><article v-for="entry in projectItems" :key="entry.id" :class="{ 'is-selected': selectedItems[entry.id] }"><label><input v-model="selectedItems[entry.id]" type="checkbox"><strong>{{ entry.item.name }}</strong><small>{{ entry.status || 'unmarked' }}</small></label><div v-if="selectedItems[entry.id]"><input v-model.number="itemAmounts[entry.id]" min="0" step="0.01" type="number" placeholder="Qty"><input v-model="itemNotes[entry.id]" placeholder="Usage note"><select v-model="itemStatuses[entry.id]"><option value="">Keep status</option><option value="installed">Installed</option><option value="used">Used</option><option value="removed">Removed</option></select></div></article></section>
-      <section class="log-edit__photos"><h2>Workshop photos</h2><div v-if="images.length"><label v-for="image in images" :key="image.id" :class="{ 'is-removed': removedImageIds.includes(image.id) }"><img :src="image.signedUrl" alt=""><span><input type="checkbox" :checked="removedImageIds.includes(image.id)" @change="toggleRemoveImage(image.id)"> Remove from log</span></label></div><label class="log-edit__upload"><input type="file" accept="image/*" multiple @change="selectFiles">+ Add more photos</label><small v-if="files.length">{{ files.length }} new {{ files.length === 1 ? 'photo' : 'photos' }} ready</small></section>
+      <section class="log-photo-section">
+        <h2>Workshop photos</h2>
+        <div class="log-photo-list">
+          <LogPhotoEditor v-for="image in imageEdits" :key="image.id" v-model:caption="image.caption" v-model:role="image.role" :src="image.signedUrl" :name="image.original_file_name" :removed="removedImageIds.includes(image.id)" :disabled="busy" @remove="toggleRemoveImage(image.id)" />
+          <LogPhotoEditor v-for="(photo, index) in photos" :key="photo.preview" v-model:caption="photo.caption" v-model:role="photo.role" :src="photo.preview" :name="photo.file.name" :disabled="busy" @remove="removeFile(index)" />
+        </div>
+        <input id="more-photos" class="sr-only" type="file" accept="image/*" multiple :disabled="busy" @change="selectFiles">
+        <label class="session-photo-add" for="more-photos">+ Add more photos</label>
+      </section>
       <p v-if="errorMessage" class="form-error">{{ errorMessage }}</p>
       <footer class="builder-submit"><div><p class="eyebrow">Archive correction</p><strong>The original work date remains part of the record.</strong></div><div><NuxtLink class="button button--ghost" :to="`/projects/${slug}/logs/${logSlug}`">Cancel</NuxtLink><button class="button" type="submit" :disabled="busy">{{ busy ? 'Updating work order…' : 'Save corrected work order →' }}</button></div></footer>
     </form>

@@ -58,7 +58,7 @@ export interface DemoLogInput {
   content: string
   findingDecisions: Array<{ finding: string; decision: string }>
   imageRole: ImageRole
-  images: Array<{ name: string; type: string; size: number; dataUrl: string }>
+  images: Array<{ name: string; type: string; size: number; dataUrl: string; role?: ImageRole; caption?: string | null }>
   itemUsage: Array<{ projectItemId: string; usageAmount: number | null; note: string | null; statusAfter?: ProjectItemStatus | null }>
 }
 
@@ -72,7 +72,8 @@ export interface DemoLogUpdateInput {
   content: string
   findingDecisions: Array<{ finding: string; decision: string }>
   imageRole: ImageRole
-  newImages: Array<{ name: string; type: string; size: number; dataUrl: string }>
+  newImages: Array<{ name: string; type: string; size: number; dataUrl: string; role?: ImageRole; caption?: string | null }>
+  imageEdits?: Array<{ id: string; role: ImageRole; caption: string | null }>
   removedImageIds: string[]
   itemUsage: DemoLogInput['itemUsage']
 }
@@ -476,8 +477,8 @@ export function useDemoStore() {
     database.value.logs.push(log)
     database.value.images.push(...input.images.map((image, index): ProjectImage => ({
       id: crypto.randomUUID(), project_id: input.projectId, log_id: id, storage_path: image.dataUrl,
-      original_file_name: image.name, media_type: image.type, byte_size: image.size, role: input.imageRole,
-      caption: null, sort_order: index, upload_status: 'ready', uploaded_by_user_id: accounts.current.value!.id,
+      original_file_name: image.name, media_type: image.type, byte_size: image.size, role: image.role ?? input.imageRole,
+      caption: image.caption?.trim() || null, sort_order: index, upload_status: 'ready', uploaded_by_user_id: accounts.current.value!.id,
       deleted_at: null, created_at: now
     })))
     database.value.logItemUsage ??= []
@@ -513,12 +514,15 @@ export function useDemoStore() {
       finding_decisions: input.findingDecisions, updated_at: now
     })
     for (const image of database.value.images) {
+      if (image.log_id !== log.id) continue
       if (input.removedImageIds.includes(image.id)) image.deleted_at = now
+      const edit = input.imageEdits?.find(entry => entry.id === image.id)
+      if (edit) { image.role = edit.role; image.caption = edit.caption?.trim() || null }
     }
     database.value.images.push(...input.newImages.map((image, index): ProjectImage => ({
       id: crypto.randomUUID(), project_id: log.project_id, log_id: log.id, storage_path: image.dataUrl,
-      original_file_name: image.name, media_type: image.type, byte_size: image.size, role: input.imageRole,
-      caption: null, sort_order: database.value.images.filter(entry => entry.log_id === log.id).length + index,
+      original_file_name: image.name, media_type: image.type, byte_size: image.size, role: image.role ?? input.imageRole,
+      caption: image.caption?.trim() || null, sort_order: database.value.images.filter(entry => entry.log_id === log.id).length + index,
       upload_status: 'ready', uploaded_by_user_id: accounts.current.value!.id, deleted_at: null, created_at: now
     })))
     database.value.logItemUsage = (database.value.logItemUsage ?? []).filter(entry => entry.log_id !== log.id)

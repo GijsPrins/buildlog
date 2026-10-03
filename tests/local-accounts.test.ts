@@ -17,6 +17,24 @@ beforeEach(() => {
 })
 
 describe('local workshop accounts', () => {
+  it('persists individual photo captions and roles when creating and editing a log', async () => {
+    const accounts = useLocalAccounts(); await accounts.initialize()
+    const demo = useDemoStore(); demo.initialize()
+    vi.stubGlobal('slugify', (value: string) => value.toLowerCase().replaceAll(' ', '-'))
+    const input = { projectId: 'demo-gios', phaseId: null, title: 'Photo story', workDate: '2026-10-03', durationMinutes: null,
+      summary: '', content: '', findingDecisions: [], imageRole: 'gallery' as const, itemUsage: [] }
+    const log = demo.addLog({ ...input, images: [
+      { name: 'one.jpg', type: 'image/jpeg', size: 1, dataUrl: 'data:image/jpeg;base64,YQ==', caption: ' Before repair ', role: 'damage' },
+      { name: 'two.jpg', type: 'image/jpeg', size: 1, dataUrl: 'data:image/jpeg;base64,Yg==', caption: 'Finished', role: 'after' }
+    ] })
+    let saved = JSON.parse(localStorage.getItem('buildlog-demo-v5')!)
+    const photos = saved.images.filter((image: { log_id: string }) => image.log_id === log.id)
+    expect(photos.map((image: { caption: string; role: string }) => [image.caption, image.role])).toEqual([['Before repair', 'damage'], ['Finished', 'after']])
+    demo.updateLog({ ...input, logId: log.id, newImages: [], removedImageIds: [photos[1].id], imageEdits: [{ id: photos[0].id, caption: 'Identifying the bearing', role: 'identification' }] })
+    saved = JSON.parse(localStorage.getItem('buildlog-demo-v5')!)
+    expect(saved.images.find((image: { id: string }) => image.id === photos[0].id)).toMatchObject({ caption: 'Identifying the bearing', role: 'identification' })
+    expect(saved.images.find((image: { id: string }) => image.id === photos[1].id).deleted_at).toBeTruthy()
+  })
   it('registers, rejects wrong passwords, recognizes exact emails and enforces roles', async () => {
     const accounts = useLocalAccounts()
     await Promise.all([accounts.initialize(), accounts.initialize()])
