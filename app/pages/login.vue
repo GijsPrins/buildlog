@@ -127,7 +127,8 @@ async function submit() {
           <button class="button workshop-access__submit" type="submit" :disabled="busy">{{ busy ? 'Opening the workshop…' : mode === 'signin' ? 'Sign in →' : 'Create my workshop account →' }}</button>
         </form>
         <p v-if="configured && mode === 'signin'" class="workshop-access__recovery">
-          Lost your tools? <NuxtLink to="/reset-password">Reset your password →</NuxtLink>
+          Can’t find your tools? Let’s get you back in.<br>
+          <NuxtLink to="/reset-password">Reset your password →</NuxtLink>
         </p>
 
         <div class="workshop-access__switch">
