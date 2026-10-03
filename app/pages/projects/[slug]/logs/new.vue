@@ -4,6 +4,10 @@ import type { ImageRole, Project, ProjectItemDetail, ProjectItemStatus, ProjectM
 definePageMeta({ middleware: 'auth' })
 
 const route = useRoute()
+const nuxtApp = useNuxtApp()
+const auth = useAuth()
+const discardDraft = ref(false)
+const draftOwner = ref('')
 const slug = computed(() => String(route.params.slug))
 const project = ref<Project | null>(null)
 const phases = ref<ProjectPhase[]>([])
@@ -198,6 +202,7 @@ async function submit() {
     uploadProgress.value = []
     try {
       await saveDemoLog()
+      discardDraft.value = true
       await navigateTo(`/projects/${slug.value}`)
     } catch (error) {
       errorMessage.value = error instanceof Error ? error.message : 'The demo log could not be saved.'
@@ -264,6 +269,7 @@ async function submit() {
       if (statusError) throw statusError
     }
     await uploadOriginals(log.id, userData.user.id)
+    discardDraft.value = true
     await navigateTo(`/projects/${project.value.slug}`)
   } catch (uploadError) {
     errorMessage.value = uploadError instanceof Error
@@ -273,7 +279,37 @@ async function submit() {
   }
 }
 
-onMounted(loadProject)
+function draftStore() {
+  return logDrafts(nuxtApp, draftOwner.value, slug.value)
+}
+
+onBeforeRouteLeave(() => {
+  if (!draftOwner.value) return
+  if (discardDraft.value || auth.user.value?.id !== draftOwner.value) { draftStore().clear(); return }
+  draftStore().save({
+    title: title.value, phaseId: phaseId.value, workDate: workDate.value,
+    durationHours: durationHours.value, durationMinutes: durationMinutes.value,
+    summary: summary.value, content: content.value, finding: finding.value, decision: decision.value,
+    selectedItems: { ...selectedItems.value }, itemAmounts: { ...itemAmounts.value },
+    itemNotes: { ...itemNotes.value }, itemStatuses: { ...itemStatuses.value },
+    photos: photos.value.map(({ file, caption, role }) => ({ file, caption, role }))
+  })
+})
+
+onMounted(async () => {
+  await auth.initialize()
+  draftOwner.value = auth.user.value?.id || ''
+  await loadProject()
+  if (!draftOwner.value || !canEdit.value) return
+  const draft = draftStore().take()
+  if (!draft) return
+  title.value = draft.title; phaseId.value = draft.phaseId; workDate.value = draft.workDate
+  durationHours.value = draft.durationHours; durationMinutes.value = draft.durationMinutes
+  summary.value = draft.summary; content.value = draft.content; finding.value = draft.finding; decision.value = draft.decision
+  selectedItems.value = draft.selectedItems; itemAmounts.value = draft.itemAmounts
+  itemNotes.value = draft.itemNotes; itemStatuses.value = draft.itemStatuses
+  photos.value = draft.photos.map(photo => ({ ...photo, preview: URL.createObjectURL(photo.file) }))
+})
 </script>
 
 <template>
@@ -348,7 +384,8 @@ onMounted(loadProject)
             </div>
           </article>
         </div>
-        <div v-else class="session-parts__empty">Nothing is in the parts ledger yet. <NuxtLink :to="`/projects/${slug}/materials`">Open the parts counter →</NuxtLink></div>
+        <p v-else class="session-parts__empty">Nothing is in the parts ledger yet.</p>
+        <NuxtLink :to="{ path: `/projects/${slug}/materials`, query: { returnTo: 'new-log' } }">Add items to the parts ledger →</NuxtLink>
       </section>
 
       <section class="session-notes" aria-labelledby="session-notes-title">
@@ -384,7 +421,7 @@ onMounted(loadProject)
       <p v-if="errorMessage" class="form-error">{{ errorMessage }}</p>
       <footer class="builder-submit session-submit">
         <div><p class="eyebrow">Session ready</p><strong>{{ files.length ? `${files.length} photo${files.length === 1 ? '' : 's'} on the bench` : 'A log can start with words alone.' }}</strong></div>
-        <div><NuxtLink class="button button--ghost" :to="`/projects/${slug}`">Cancel</NuxtLink><button class="button" type="submit" :disabled="busy">{{ busy ? 'Saving workshop session…' : 'Add session to the build →' }}</button></div>
+        <div><NuxtLink class="button button--ghost" :to="`/projects/${slug}`" @click="discardDraft = true">Cancel</NuxtLink><button class="button" type="submit" :disabled="busy">{{ busy ? 'Saving workshop session…' : 'Add session to the build →' }}</button></div>
       </footer>
     </form>
   </div>

@@ -137,6 +137,7 @@ onMounted(loadMaterials)
     <h2>Parts ledger unavailable</h2><p>{{ errorMessage }}</p><NuxtLink class="button" :to="`/projects/${slug}`">Back to the project</NuxtLink>
   </div>
   <div v-else class="materials-builder" :style="projectStyle">
+    <p v-if="route.query.returnTo === 'new-log'" class="materials-draft-return"><NuxtLink class="button" :to="`/projects/${slug}/logs/new`">← Back to your log draft</NuxtLink> Your draft is kept while you add parts in this tab.</p>
     <div class="materials-builder__bar"><NuxtLink :to="`/projects/${slug}`">← {{ project.name }}</NuxtLink><strong>FORM BOM-01</strong><span>Parts &amp; materials ledger</span></div>
     <header class="materials-builder__header">
       <div><p class="eyebrow">Keep only what is useful</p><h1>Parts counter</h1><p>Plan replacements, remember what is already on the shelf and connect used parts to a workshop session.</p></div>
