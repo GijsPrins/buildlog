@@ -617,6 +617,8 @@ img { display: block; max-width: 100%; }
 .workshop-access .workshop-access__password input { border-bottom: 0; background: transparent; }
 .workshop-access__password button { border: 0; padding: 0 0.9rem; background: transparent; color: #123f36; cursor: pointer; font-family: var(--access-type); font-size: 0.65rem; font-weight: 700; text-transform: uppercase; }
 .workshop-access__submit { width: 100%; min-height: 3.2rem; margin-top: 0.35rem; border-radius: 0; font-family: var(--access-type); font-size: 0.83rem; }
+.workshop-access__recovery { margin: 1rem 0; text-align: center; font-size: 0.85rem; line-height: 1.6; }
+.workshop-access__recovery a { color: #123f36; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
 .workshop-access__switch { display: flex; justify-content: center; flex-wrap: wrap; gap: 0.35rem 0.7rem; margin: 1.3rem 0 2rem; font-size: 0.75rem; }
 .workshop-access__switch button { padding: 0; border: 0; border-bottom: 1px solid currentColor; background: transparent; color: #123f36; cursor: pointer; font-weight: 700; }
 .workshop-access__demo { padding: 0.8rem 0; border-top: 1px dashed #a99c81; font-family: var(--access-type); font-size: 0.7rem; }
