@@ -12,6 +12,7 @@ import { collectPages } from '../app/utils/workshopFinancials'
 function editor(file: string, failTable: string) {
   let failing = true
   const save = vi.fn().mockResolvedValue({ id: 'saved-log' })
+  const create = vi.fn().mockResolvedValue('saved-project')
   const takeDraft = vi.fn().mockReturnValue(null)
   const project = { id: 'project', slug: 'bike', items_enabled: true, cost_tracking_enabled: true }
   const client = {
@@ -28,20 +29,34 @@ function editor(file: string, failTable: string) {
   const source = readFileSync(`app/pages/projects/[slug]/${file}`, 'utf8')
     .match(/<script setup lang="ts">([\s\S]*?)<\/script>/)![1]!.replace(/^import[\s\S]*?from '[^']+'\r?\n/gm, '')
   const context = vm.createContext({
-    Error, crypto: webcrypto, ref, computed, collectPages, checkedData, saveWorkshopLog: save, logDrafts: () => ({ take: takeDraft }),
+    Error, crypto: webcrypto, ref, computed, collectPages, checkedData, saveWorkshopLog: save, saveProjectCreation: create, logDrafts: () => ({ take: takeDraft }),
+    createProjectTemplateSnapshot: () => ({ theme: {}, phases: ['Start'], itemsEnabled: false, costsEnabled: false }), projectTemplates: [], validateTheme: () => null,
     definePageMeta() {}, onMounted() {}, onBeforeRouteLeave() {}, onBeforeUnmount() {}, watch() {},
     useRoute: () => ({ params: { slug: 'bike', logSlug: 'session' }, query: {} }), useNuxtApp: () => ({}),
     useAuth: () => ({ user: ref({ id: 'owner' }) }), useDemoMode: () => ref(false), useDemoStore: () => ({}), useSupabase: () => client,
     useLogAuthors: () => ({ loadAuthors: async () => {}, authorName: () => '' }),
-    useLogPhotos: () => ({ photos: ref([]), files: ref([]), clearPhotos() {} }),
+    useLogPhotos: () => ({ photos: ref([]), files: ref([]), removedPhotoIds: ref([]), clearPhotos() {} }),
     todayIso: () => '2026-10-04', projectThemeStyle: () => ({}), formatDuration: () => '',
     normalizeFindings: (v: unknown) => v, optionalAmount: (v: unknown) => v ?? null, slugify: (v: string) => v.toLowerCase(), navigateTo: async () => {}
   })
   vm.runInContext(ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText, context)
-  return { get: (expression: string) => vm.runInContext(expression, context), recover() { failing = false }, save, takeDraft }
+  return { get: (expression: string) => vm.runInContext(expression, context), recover() { failing = false }, save, create, takeDraft }
 }
 
 describe('editor failure isolation', () => {
+  it('resumes a partially created project and guards concurrent submits', async () => {
+    const page = editor('../new.vue', '')
+    page.get("name.value='New build';slug.value='new-build';startedStory.value='Kept story'")
+    page.create.mockRejectedValueOnce(new Error('The project is saved, but its cover is not complete.'))
+    await page.get('submit()')
+    expect(page.get('busy.value')).toBe(false)
+    await page.get('submit()')
+    expect(page.create.mock.calls[1]![1]).toEqual(page.create.mock.calls[0]![1])
+    expect(page.create.mock.calls[1]![2]).toEqual(page.create.mock.calls[0]![2])
+    expect(page.create.mock.calls[0]![1].started_story).toBe('Kept story')
+    page.get('busy.value=true'); await page.get('submit()')
+    expect(page.create).toHaveBeenCalledTimes(2)
+  })
   it('blocks log correction after a failed usage read and allows retry after a complete read', async () => {
     const page = editor('logs/[logSlug].vue', 'log_item_usage')
     await page.get('loadDetail()')

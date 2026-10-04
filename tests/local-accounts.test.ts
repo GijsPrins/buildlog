@@ -3,12 +3,17 @@ import { computed, ref } from 'vue'
 import { webcrypto } from 'node:crypto'
 import { useLocalAccounts } from '../app/composables/useLocalAccounts'
 import { createDemoDatabase, useDemoStore } from '../app/composables/useDemoStore'
+import { slugify } from '../app/utils/format'
 
 beforeEach(() => {
+  vi.restoreAllMocks(); vi.unstubAllGlobals()
+  const disk = window.localStorage
+  vi.stubGlobal('localStorage', { getItem: disk.getItem.bind(disk), setItem: disk.setItem.bind(disk), removeItem: disk.removeItem.bind(disk), clear: disk.clear.bind(disk) })
   const states = new Map<string, ReturnType<typeof ref>>()
   localStorage.clear()
   vi.stubGlobal('crypto', webcrypto)
   vi.stubGlobal('computed', computed)
+  vi.stubGlobal('slugify', slugify)
   vi.stubGlobal('useState', (key: string, initial: () => unknown) => {
     if (!states.has(key)) states.set(key, ref(initial()))
     return states.get(key)
@@ -17,6 +22,40 @@ beforeEach(() => {
 })
 
 describe('local workshop accounts', () => {
+  it('rolls back a quota failure and can retry without a phantom log', async () => {
+    const accounts = useLocalAccounts(); await accounts.initialize()
+    const demo = useDemoStore(); demo.initialize()
+    const before = demo.getProject('gios-torino-restoration')!
+    const original = localStorage.getItem('buildlog-demo-v5')
+    const input = { projectId: before.project.id, phaseId: null, title: 'Quota test', workDate: '2026-10-04', durationMinutes: 20,
+      summary: '', content: 'Keep form input', findingDecisions: [], imageRole: 'gallery' as const, images: [], itemUsage: [] }
+    const write = vi.spyOn(localStorage, 'setItem').mockImplementation(() => { throw new DOMException('Full', 'QuotaExceededError') })
+    expect(() => demo.addLog(input)).toThrow('storage is full')
+    expect(demo.getProject('gios-torino-restoration')!.logs).toHaveLength(before.logs.length)
+    expect(localStorage.getItem('buildlog-demo-v5')).toBe(original)
+    write.mockRestore()
+    demo.addLog(input)
+    expect(demo.getProject('gios-torino-restoration')!.logs.filter(log => log.title === 'Quota test')).toHaveLength(1)
+  })
+  it('restores membership as well as content when demo project persistence fails', async () => {
+    const accounts = useLocalAccounts(); await accounts.initialize()
+    const demo = useDemoStore(); demo.initialize()
+    const template = demo.getProject('gios-torino-restoration')!.project
+    const members = JSON.stringify(accounts.state.value.members)
+    const input = { name: 'Quota project', slug: 'quota-project', subtitle: null, description: null, startedStory: null, motivationStory: null, objectStory: null,
+      isPublic: true, itemsEnabled: false, costsEnabled: false, currencyCode: 'EUR', theme: template.theme_config, currentPhaseIndex: 0, phases: ['Start'], heroImage: null }
+    const set = localStorage.setItem
+    const write = vi.spyOn(localStorage, 'setItem').mockImplementation((key: string, value: string) => {
+      if (key === 'buildlog-demo-v5') throw new DOMException('Full', 'QuotaExceededError')
+      set(key, value)
+    })
+    expect(() => demo.createProject(input)).toThrow('storage is full')
+    expect(demo.getProject('quota-project')).toBeNull()
+    expect(JSON.stringify(accounts.state.value.members)).toBe(members)
+    write.mockRestore()
+    demo.createProject(input)
+    expect(demo.getProject('quota-project')).toBeTruthy()
+  })
   it('allows an unused currency change but locks recorded allocations, including disabled ledgers', async () => {
     const accounts = useLocalAccounts(); await accounts.initialize()
     const demo = useDemoStore(); demo.initialize()

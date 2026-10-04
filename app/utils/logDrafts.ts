@@ -2,6 +2,7 @@ import type { ImageRole, ProjectItemStatus } from '~/types/domain'
 
 export interface LogDraft {
   logId?: string; logSlug?: string
+  removedPhotoIds?: string[]
   title: string; phaseId: string; workDate: string
   durationHours: number | null; durationMinutes: number | null
   summary: string; content: string; finding: string; decision: string

@@ -79,9 +79,9 @@ function archivePhase(phase: ProjectEditorPhase) {
     <section class="project-editor__cover">
       <div>
         <p class="eyebrow">The object on the stand</p>
-        <textarea v-model="name" required maxlength="160" aria-label="Project name" placeholder="Name this build" />
-        <textarea v-model="subtitle" aria-label="Project subtitle" placeholder="One line that captures its character" />
-        <textarea v-model="description" aria-label="Project description" placeholder="What are you making or restoring?" />
+        <textarea v-auto-resize v-model="name" required maxlength="160" aria-label="Project name" placeholder="Name this build" />
+        <textarea v-auto-resize v-model="subtitle" aria-label="Project subtitle" placeholder="One line that captures its character" />
+        <textarea v-auto-resize v-model="description" aria-label="Project description" placeholder="What are you making or restoring?" />
         <label><span>Workshop address</span><div>/projects/ <input v-model="projectSlug" required pattern="[a-z0-9]+(?:-[a-z0-9]+)*"></div></label>
       </div>
       <label class="project-editor__hero">
@@ -93,7 +93,7 @@ function archivePhase(phase: ProjectEditorPhase) {
 
     <section class="project-editor__section">
       <header class="builder-section-heading"><span>01</span><div><p class="eyebrow">Project anchor</p><h2>The story</h2></div><p>Keep the reason for the build close to the work itself.</p></header>
-      <div class="builder-story-grid"><article><span>01</span><label :for="`${fieldId}-started`">How it started</label><textarea :id="`${fieldId}-started`" v-model="startedStory" placeholder="Where did you find it? What made you stop and look?" /></article><article><span>02</span><label :for="`${fieldId}-motivation`">Why this build</label><textarea :id="`${fieldId}-motivation`" v-model="motivationStory" placeholder="What do you want to preserve, change or prove?" /></article><article><span>03</span><label :for="`${fieldId}-object`">The object before us</label><textarea :id="`${fieldId}-object`" v-model="objectStory" placeholder="Known history, clues, scars — and what remains unknown." /></article></div>
+      <div class="builder-story-grid"><article><span>01</span><label :for="`${fieldId}-started`">How it started</label><textarea v-auto-resize :id="`${fieldId}-started`" v-model="startedStory" placeholder="Where did you find it? What made you stop and look?" /></article><article><span>02</span><label :for="`${fieldId}-motivation`">Why this build</label><textarea v-auto-resize :id="`${fieldId}-motivation`" v-model="motivationStory" placeholder="What do you want to preserve, change or prove?" /></article><article><span>03</span><label :for="`${fieldId}-object`">The object before us</label><textarea v-auto-resize :id="`${fieldId}-object`" v-model="objectStory" placeholder="Known history, clues, scars — and what remains unknown." /></article></div>
     </section>
 
     <section class="project-editor__section">

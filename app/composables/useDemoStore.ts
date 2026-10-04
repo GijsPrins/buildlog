@@ -302,6 +302,7 @@ export function useDemoStore() {
   const database = useState<DemoDatabase>('demo-database', createDemoDatabase)
   const accounts = useLocalAccounts()
   const initialized = useState('demo-initialized', () => false)
+  const committed = useState('demo-committed', () => JSON.stringify(database.value))
 
   function initialize() {
     if (initialized.value || !import.meta.client) return
@@ -329,12 +330,26 @@ export function useDemoStore() {
     database.value.projectItems ??= []
     database.value.logItemUsage ??= []
     accounts.ensureOwners(database.value.projects.map(project => project.id))
+    committed.value = JSON.stringify(database.value)
     initialized.value = true
-    if (seedDemoSocial(database.value)) persist()
+    if (seedDemoSocial(database.value)) {
+      // An automatic seed upgrade must not prevent opening an existing full demo.
+      try { persist() } catch { /* persist restores the last complete snapshot */ }
+    }
   }
 
   function persist() {
-    if (import.meta.client) localStorage.setItem(STORAGE_KEY, JSON.stringify(database.value))
+    const next = JSON.stringify(database.value)
+    try {
+      if (import.meta.client) localStorage.setItem(STORAGE_KEY, next)
+      committed.value = next
+    } catch (cause) {
+      database.value = JSON.parse(committed.value) as DemoDatabase
+      const quota = cause instanceof DOMException && ['QuotaExceededError', 'NS_ERROR_DOM_QUOTA_REACHED'].includes(cause.name)
+      throw new Error(quota
+        ? 'This browser’s demo storage is full. Your previous records are safe. Remove some selected photos or use smaller originals and retry. You can reset the local demo to clear all its records.'
+        : 'This browser could not save the demo. Your previous records are safe. Check browser storage permissions and retry.')
+    }
   }
 
   function listProjects(): ProjectSummary[] {
@@ -521,10 +536,17 @@ export function useDemoStore() {
         deleted_at: null, created_at: now
       })
     }
-    accounts.addOwner(project.id)
-    database.value.projects.push(project)
-    database.value.phases.push(...phases)
-    persist()
+    const accountSnapshot = JSON.stringify(accounts.state.value)
+    try {
+      accounts.addOwner(project.id)
+      database.value.projects.push(project)
+      database.value.phases.push(...phases)
+      persist()
+    } catch (cause) {
+      database.value = JSON.parse(committed.value) as DemoDatabase
+      accounts.restoreSnapshot(accountSnapshot)
+      throw cause
+    }
     return project
   }
 
@@ -651,10 +673,11 @@ export function useDemoStore() {
       const edit = input.imageEdits?.find(entry => entry.id === image.id)
       if (edit) { image.role = edit.role; image.caption = edit.caption?.trim() || null }
     }
+    const nextImageOrder = Math.max(-1, ...database.value.images.filter(image => image.log_id === log.id && !image.deleted_at).map(image => image.sort_order)) + 1
     database.value.images.push(...input.newImages.map((image, index): ProjectImage => ({
       id: crypto.randomUUID(), project_id: log.project_id, log_id: log.id, storage_path: image.dataUrl,
       original_file_name: image.name, media_type: image.type, byte_size: image.size, role: image.role ?? input.imageRole,
-      caption: image.caption?.trim() || null, sort_order: database.value.images.filter(entry => entry.log_id === log.id).length + index,
+      caption: image.caption?.trim() || null, sort_order: nextImageOrder + index,
       upload_status: 'ready', uploaded_by_user_id: accounts.current.value!.id, deleted_at: null, created_at: now
     })))
     if (database.value.projects.find(entry => entry.id === log.project_id)?.items_enabled) {

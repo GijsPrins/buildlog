@@ -49,7 +49,7 @@ const itemCosts = ref<Record<string, number | null>>({})
 const itemNotes = ref<Record<string, string>>({})
 const itemStatuses = ref<Record<string, ProjectItemStatus | ''>>({})
 const removedImageIds = ref<string[]>([])
-const { photos, files, selectFiles, removeFile, clearPhotos } = useLogPhotos()
+const { photos, files, removedPhotoIds, selectFiles, removeFile, clearPhotos } = useLogPhotos()
 const imageEdits = ref<Array<ProjectImage & { signedUrl?: string }>>([])
 const demoMode = useDemoMode()
 const demo = useDemoStore()
@@ -160,7 +160,7 @@ async function save() {
         usage: project.value.items_enabled ? usageInput().map(entry => ({ project_item_id: entry.projectItemId,
           usage_amount: entry.usageAmount, usage_cost: entry.usageCost, note: entry.note, status_after: entry.statusAfter })) : null,
         imageEdits: imageEdits.value.map(image => ({ id: image.id, role: image.role, caption: image.caption?.trim() || null, removed: removedImageIds.value.includes(image.id) })),
-        photos: photos.value, sortOffset: images.value.length
+        photos: photos.value, removedPhotoIds: removedPhotoIds.value
       })
     }
     editing.value = false; clearPhotos(); await navigateTo(`/projects/${slug.value}/logs/${logSlug.value}`, { replace: true }); await loadDetail()
@@ -199,8 +199,8 @@ watch(() => route.query.edit, value => { editing.value = value === '1' && canEdi
         <label class="field"><span>Workshop date</span><input v-model="workDate" type="date" required></label>
         <label class="field"><span>Hours</span><input v-model.number="durationHours" type="number" min="0"></label>
         <label class="field"><span>Minutes</span><input v-model.number="durationMinutes" type="number" min="0" max="59"></label>
-        <label class="field field--full"><span>Summary</span><textarea v-model="summary" /></label>
-        <label class="field field--full"><span>Workshop notes</span><textarea v-model="content" /></label>
+        <label class="field field--full"><span>Summary</span><textarea v-auto-resize v-model="summary" /></label>
+        <label class="field field--full"><span>Workshop notes</span><textarea v-auto-resize v-model="content" /></label>
         <div class="field field--full"><h2>Findings &amp; decisions</h2><FindingDecisionEditor v-model="observations" :disabled="busy" /></div>
       </div>
       <section v-if="project.items_enabled" class="log-edit__parts"><h2>Parts used</h2><article v-for="entry in projectItems" :key="entry.id" :class="{ 'is-selected': selectedItems[entry.id] }"><label><input v-model="selectedItems[entry.id]" type="checkbox"><strong>{{ entry.item.name }}</strong><small>{{ entry.status || 'unmarked' }}</small></label><div v-if="selectedItems[entry.id]"><input v-model.number="itemAmounts[entry.id]" min="0" step="0.01" type="number" :aria-label="`Quantity for ${entry.item.name}`" placeholder="Qty"><label v-if="project.cost_tracking_enabled">Usage cost ({{ project.currency_code }})<input v-model.number="itemCosts[entry.id]" min="0" step="0.01" type="number" placeholder="Not recorded"></label><input v-model="itemNotes[entry.id]" :aria-label="`Usage note for ${entry.item.name}`" placeholder="Usage note"><select v-model="itemStatuses[entry.id]" :aria-label="`Status after this session for ${entry.item.name}`"><option value="">Keep status</option><option value="installed">Installed</option><option value="used">Used</option><option value="removed">Removed</option></select></div></article></section>

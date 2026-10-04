@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { checkedData, saveWorkshopLog } from '../app/utils/workshopSaves'
+import { checkedData, saveWorkshopLog, saveProjectCreation } from '../app/utils/workshopSaves'
 import { collectInBatches, collectPages } from '../app/utils/workshopFinancials'
 
 function fixture() {
@@ -15,6 +15,23 @@ function fixture() {
 }
 
 describe('safe workshop saves', () => {
+  it('sends removed pending photo IDs with the retry rather than dropping them silently', async () => {
+    const f = fixture()
+    await saveWorkshopLog(f.client, { ...f.input, removedPhotoIds: ['previous-upload'] })
+    expect(f.rpc.mock.calls[0]![1].p_image_edits).toEqual([{ id: 'previous-upload', removed: true, pending: true, role: 'gallery', caption: null }])
+  })
+  it('resumes project cover uploads with the same project and photo reservation', async () => {
+    const f = fixture()
+    f.rpc.mockResolvedValue({ data: 'project-stable', error: null })
+    const chain = f.client.from('project_images') as unknown as Record<string, unknown>
+    chain.maybeSingle = vi.fn().mockResolvedValue({ data: { id: 'photo-stable', storage_path: 'project/photo-stable/original', upload_status: 'reserved' }, error: null })
+    f.upload.mockResolvedValueOnce({ error: new Error('Upload failed') })
+    const project = { id: 'project-stable', slug: 'kept-slug' }
+    await expect(saveProjectCreation(f.client, project, [], f.input.photos[0]!, 'owner')).rejects.toThrow('finish the same project')
+    await saveProjectCreation(f.client, project, [], f.input.photos[0]!, 'owner')
+    expect(f.rpc.mock.calls[1]).toEqual(f.rpc.mock.calls[0])
+    expect(f.upload.mock.calls[1]![0]).toBe(f.upload.mock.calls[0]![0])
+  })
   it('retries the same session and photo after a failed upload', async () => {
     const f = fixture()
     f.upload.mockResolvedValueOnce({ error: new Error('Network failure') })

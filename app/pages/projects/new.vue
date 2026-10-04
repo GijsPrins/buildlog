@@ -2,6 +2,7 @@
 import type { ThemeConfig } from '~/types/domain'
 import type { ProjectEditorPhase } from '~/utils/projectEditor'
 import { createProjectTemplateSnapshot, projectTemplates } from '~/utils/projectTemplates'
+import { saveProjectCreation } from '~/utils/workshopSaves'
 import { validateTheme } from '~/utils/themes'
 
 definePageMeta({ middleware: 'auth' })
@@ -13,6 +14,8 @@ const description = ref('')
 const startedStory = ref('')
 const motivationStory = ref('')
 const objectStory = ref('')
+const projectId = ref('')
+const heroId = ref('')
 const heroFile = ref<File | null>(null)
 const heroPreview = ref('')
 const isPublic = ref(false)
@@ -42,6 +45,7 @@ function selectHero(event: Event) {
   const input = event.target as HTMLInputElement
   const file = input.files?.[0] ?? null
   if (heroPreview.value) URL.revokeObjectURL(heroPreview.value)
+  heroId.value = file ? crypto.randomUUID() : ''
   heroFile.value = file
   heroPreview.value = file ? URL.createObjectURL(file) : ''
 }
@@ -66,6 +70,7 @@ watch(name, (value, previousValue) => {
 })
 
 async function submit() {
+  if (busy.value) return
   const invalidTheme = validateTheme(theme.value)
   if (invalidTheme) { errorMessage.value = invalidTheme; return }
   const usablePhases = phases.value.filter(phase => !phase.archived && phase.name.trim())
@@ -124,126 +129,26 @@ async function submit() {
   busy.value = true
   errorMessage.value = ''
 
-  const { data, error } = await supabase.rpc('create_project', {
-    p_slug: slugify(slug.value),
-    p_name: name.value.trim(),
-    p_subtitle: subtitle.value.trim() || null,
-    p_description: description.value.trim() || null,
-    p_is_public: isPublic.value,
-    p_currency_code: currencyCode.value.toUpperCase(),
-    p_items_enabled: itemsEnabled.value,
-    p_cost_tracking_enabled: itemsEnabled.value && costsEnabled.value,
-    p_theme_config: theme.value,
-    p_phases: usablePhases.map((phase, index) => ({ name: phase.name.trim(), sortOrder: index }))
-  })
+  try {
+    const { data, error: authError } = await supabase.auth.getUser()
+    if (authError || !data.user) throw new Error('Your session expired. Sign in again.')
+    projectId.value ||= crypto.randomUUID()
+    for (const phase of usablePhases) phase.id ||= crypto.randomUUID()
+    const current = usablePhases.find(phase => phase.key === currentPhaseKey.value)
+    const cleanSlug = slugify(slug.value)
+    await saveProjectCreation(supabase, {
+      id: projectId.value, slug: cleanSlug, name: name.value.trim(), subtitle: subtitle.value.trim() || null,
+      description: description.value.trim() || null, started_story: startedStory.value.trim() || null,
+      motivation_story: motivationStory.value.trim() || null, object_story: objectStory.value.trim() || null,
+      current_phase_id: current?.id || null, hero_image_id: null, is_completed: false, is_public: isPublic.value,
+      currency_code: currencyCode.value.toUpperCase(), items_enabled: itemsEnabled.value,
+      cost_tracking_enabled: itemsEnabled.value && costsEnabled.value, theme_config: theme.value
+    }, usablePhases.map((phase, index) => ({ id: phase.id, name: phase.name.trim(), archived: false, sort_order: index })),
+      heroFile.value ? { id: heroId.value, file: heroFile.value, role: 'before', caption: `The starting point for ${name.value.trim()}.` } : null, data.user.id)
+    await navigateTo(`/projects/${cleanSlug}`)
+  } catch (cause) { errorMessage.value = cause instanceof Error ? cause.message : 'Could not save the project. Retry to resume the same project.' }
+  finally { busy.value = false }
 
-  if (error) {
-    errorMessage.value = error.message
-    busy.value = false
-    return
-  }
-
-  if (data) {
-    const { error: storyError } = await supabase
-      .from('projects')
-      .update({
-        started_story: startedStory.value.trim() || null,
-        motivation_story: motivationStory.value.trim() || null,
-        object_story: objectStory.value.trim() || null
-      })
-      .eq('id', data)
-
-    if (storyError) {
-      errorMessage.value = `Project created, but its story could not be saved: ${storyError.message}`
-      busy.value = false
-      return
-    }
-
-    if (!currentPhaseKey.value) {
-      const { error: currentPhaseError } = await supabase.from('projects').update({ current_phase_id: null }).eq('id', data)
-      if (currentPhaseError) { errorMessage.value = `Project created, but its current phase could not be cleared: ${currentPhaseError.message}`; busy.value = false; return }
-    } else {
-      const selectedIndex = usablePhases.findIndex(phase => phase.key === currentPhaseKey.value)
-      if (selectedIndex > 0) {
-        const { data: selectedPhase, error: phaseError } = await supabase.from('project_phases').select('id').eq('project_id', data).eq('sort_order', selectedIndex).single()
-        if (phaseError) { errorMessage.value = `Project created, but its current phase could not be set: ${phaseError.message}`; busy.value = false; return }
-        const selectedPhaseId = selectedPhase?.id
-        if (selectedPhaseId) {
-          const { error: currentPhaseError } = await supabase.from('projects').update({ current_phase_id: selectedPhaseId }).eq('id', data)
-          if (currentPhaseError) { errorMessage.value = `Project created, but its current phase could not be set: ${currentPhaseError.message}`; busy.value = false; return }
-        }
-      }
-    }
-
-    if (heroFile.value) {
-      const { data: userData } = await supabase.auth.getUser()
-      if (!userData.user) {
-        errorMessage.value = 'Project created, but the photo could not be uploaded because your session expired.'
-        busy.value = false
-        return
-      }
-
-      const { data: image, error: reservationError } = await supabase
-        .from('project_images')
-        .insert({
-          project_id: data,
-          log_id: null,
-          original_file_name: heroFile.value.name,
-          media_type: heroFile.value.type || 'image/jpeg',
-          byte_size: heroFile.value.size,
-          role: 'before',
-          caption: `The starting point for ${name.value.trim()}.`,
-          sort_order: 0,
-          upload_status: 'reserved',
-          uploaded_by_user_id: userData.user.id
-        })
-        .select('id,storage_path')
-        .single()
-
-      if (reservationError || !image) {
-        errorMessage.value = `Project created, but its photo could not be reserved: ${reservationError?.message || 'Unknown error'}`
-        busy.value = false
-        return
-      }
-
-      const { error: uploadError } = await supabase.storage
-        .from('project-originals')
-        .upload(image.storage_path, heroFile.value, {
-          contentType: heroFile.value.type || 'image/jpeg',
-          upsert: false
-        })
-
-      if (uploadError) {
-        await supabase.from('project_images').update({ upload_status: 'failed' }).eq('id', image.id)
-        errorMessage.value = `Project created, but its photo could not be uploaded: ${uploadError.message}`
-        busy.value = false
-        return
-      }
-
-      const { error: readyError } = await supabase
-        .from('project_images')
-        .update({ upload_status: 'ready' })
-        .eq('id', image.id)
-
-      if (readyError) {
-        errorMessage.value = `Project and photo were saved, but the upload could not be finalized: ${readyError.message}`
-        busy.value = false
-        return
-      }
-
-      const { error: projectHeroError } = await supabase
-        .from('projects')
-        .update({ hero_image_id: image.id })
-        .eq('id', data)
-      if (projectHeroError) {
-        errorMessage.value = `Project and photo were saved, but the photo could not be set as the cover: ${projectHeroError.message}`
-        busy.value = false
-        return
-      }
-    }
-
-    await navigateTo(`/projects/${slugify(slug.value)}`)
-  }
 }
 </script>
 

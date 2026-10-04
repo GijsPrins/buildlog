@@ -27,7 +27,7 @@ const durationMinutes = ref<number | null>(null)
 const summary = ref('')
 const content = ref('')
 const observations = ref<Array<{ finding: string; decision: string }>>([{ finding: '', decision: '' }])
-const { photos, files, selectFiles, removeFile } = useLogPhotos()
+const { photos, files, removedPhotoIds, selectFiles, removeFile } = useLogPhotos()
 const logId = ref('')
 const stableLogSlug = ref('')
 const busy = ref(false)
@@ -143,7 +143,7 @@ async function submit() {
           usage_cost: project.value!.cost_tracking_enabled ? optionalAmount(itemCosts.value[entry.id]) : null,
           note: itemNotes.value[entry.id]?.trim() || null, status_after: itemStatuses.value[entry.id] || null
         })) : null,
-        imageEdits: [], photos: photos.value
+        imageEdits: [], photos: photos.value, removedPhotoIds: removedPhotoIds.value
       }, (index, text) => { uploadProgress.value[index] = text })
     }
     discardDraft.value = true
@@ -160,7 +160,7 @@ onBeforeRouteLeave(() => {
   if (!draftOwner.value) return
   if (discardDraft.value || auth.user.value?.id !== draftOwner.value) { draftStore().clear(); return }
   draftStore().save({
-    logId: logId.value, logSlug: stableLogSlug.value, title: title.value, phaseId: phaseId.value, workDate: workDate.value,
+    logId: logId.value, logSlug: stableLogSlug.value, removedPhotoIds: [...removedPhotoIds.value], title: title.value, phaseId: phaseId.value, workDate: workDate.value,
     durationHours: durationHours.value, durationMinutes: durationMinutes.value,
     summary: summary.value, content: content.value, finding: '', decision: '', findingDecisions: observations.value.map(entry => ({ ...entry })),
     selectedItems: { ...selectedItems.value }, itemAmounts: { ...itemAmounts.value }, itemCosts: { ...itemCosts.value },
@@ -174,6 +174,7 @@ function restoreDraft() {
   const draft = draftStore().take()
   if (!draft) return
   logId.value = draft.logId || ''; stableLogSlug.value = draft.logSlug || ''
+  removedPhotoIds.value = draft.removedPhotoIds ?? []
   title.value = draft.title; phaseId.value = draft.phaseId; workDate.value = draft.workDate
   durationHours.value = draft.durationHours; durationMinutes.value = draft.durationMinutes
   summary.value = draft.summary; content.value = draft.content; observations.value = draft.findingDecisions?.map(entry => ({ ...entry })) || [{ finding: draft.finding, decision: draft.decision }]
@@ -209,9 +210,9 @@ onMounted(async () => {
         <div class="session-lead__copy">
           <p class="eyebrow">Capture it while it is still on the bench</p>
           <label class="sr-only" for="title">What did you do?</label>
-          <textarea id="title" v-model="title" class="session-title-input" required placeholder="What happened in the workshop?" @keydown.enter.prevent />
+          <textarea v-auto-resize id="title" v-model="title" class="session-title-input" required placeholder="What happened in the workshop?" @keydown.enter.prevent />
           <label class="sr-only" for="summary">Short summary</label>
-          <textarea id="summary" v-model="summary" class="session-summary-input" placeholder="The one thing worth remembering from this session…" />
+          <textarea v-auto-resize id="summary" v-model="summary" class="session-summary-input" placeholder="The one thing worth remembering from this session…" />
           <p class="session-lead__nudge">A title and one photo already make a useful log. Add detail only while it helps.</p>
         </div>
 
@@ -273,7 +274,7 @@ onMounted(async () => {
           <p>Write for your future self: order of work, tools, measurements and anything that will save time next session.</p>
         </header>
         <label class="sr-only" for="content">Workshop notes</label>
-        <textarea id="content" v-model="content" class="session-notes-input" placeholder="What did you try? What came apart easily? What needs another look?" />
+        <textarea v-auto-resize id="content" v-model="content" class="session-notes-input" placeholder="What did you try? What came apart easily? What needs another look?" />
       </section>
 
       <section class="session-decisions" aria-labelledby="session-decisions-title">

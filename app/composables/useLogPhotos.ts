@@ -3,6 +3,7 @@ import type { ImageRole } from '~/types/domain'
 export function useLogPhotos() {
   const photos = ref<Array<{ id: string; file: File; preview: string; caption: string; role: ImageRole }>>([])
   const files = computed(() => photos.value.map(photo => photo.file))
+  const removedPhotoIds = ref<string[]>([])
   function selectFiles(event: Event) {
     const input = event.target as HTMLInputElement
     for (const file of Array.from(input.files ?? [])) {
@@ -13,13 +14,14 @@ export function useLogPhotos() {
   }
   function removeFile(index: number) {
     const photo = photos.value[index]
-    if (photo) URL.revokeObjectURL(photo.preview)
+    if (photo) { removedPhotoIds.value.push(photo.id); URL.revokeObjectURL(photo.preview) }
     photos.value.splice(index, 1)
   }
   function clearPhotos() {
     for (const photo of photos.value) URL.revokeObjectURL(photo.preview)
     photos.value = []
+    removedPhotoIds.value = []
   }
   onBeforeUnmount(clearPhotos)
-  return { photos, files, selectFiles, removeFile, clearPhotos }
+  return { photos, files, removedPhotoIds, selectFiles, removeFile, clearPhotos }
 }

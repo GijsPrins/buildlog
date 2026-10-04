@@ -8,8 +8,8 @@ defineProps<{ disabled?: boolean }>()
     <fieldset v-for="(entry, index) in entries" :key="index" :disabled="disabled">
       <legend>Observation {{ index + 1 }}</legend>
       <div class="session-decision-grid">
-        <label>What did you find?<textarea v-model="entry.finding" placeholder="A worn bearing, an unexpected marking…" /></label>
-        <label>What will you do about it?<textarea v-model="entry.decision" placeholder="Reuse, replace, investigate or deliberately leave alone…" /></label>
+        <label>What did you find?<textarea v-auto-resize v-model="entry.finding" placeholder="A worn bearing, an unexpected marking…" /></label>
+        <label>What will you do about it?<textarea v-auto-resize v-model="entry.decision" placeholder="Reuse, replace, investigate or deliberately leave alone…" /></label>
       </div>
       <button type="button" class="button button--ghost button--small" :aria-label="`Remove observation ${index + 1}`" @click="entries.splice(index, 1)">Remove observation</button>
     </fieldset>
