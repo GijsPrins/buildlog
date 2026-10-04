@@ -183,6 +183,8 @@ img { display: block; max-width: 100%; }
 .project-frame--print .project-work-order__visual img, .project-frame--print .project-editor__hero img { border: 12px solid var(--project-surface); border-bottom-width: 30px; }
 .project-workshop .button { border-color: var(--project-primary); border-radius: var(--project-radius, 0.15rem); background: var(--project-primary); }
 .project-workshop .button:hover { background: color-mix(in srgb, var(--project-primary), #fff 10%); }
+.project-workshop .button--ghost { border-color: var(--project-border); background: transparent; color: var(--project-text); }
+.project-workshop .button--ghost:hover { background: color-mix(in srgb, var(--project-primary), transparent 90%); }
 .project-work-order { border: 1px solid color-mix(in srgb, var(--project-primary), #222 34%); background: var(--project-surface); box-shadow: 10px 10px 0 color-mix(in srgb, var(--project-primary), transparent 78%); }
 .project-work-order__bar { display: flex; min-height: 2.6rem; padding: 0.6rem 0.8rem; align-items: center; justify-content: space-between; gap: 1rem; background: #202a27; color: #dce4e1; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 0.65rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; }
 .project-work-order__bar a { color: white; }
