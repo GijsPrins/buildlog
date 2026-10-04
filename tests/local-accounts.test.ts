@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { computed, ref } from 'vue'
 import { webcrypto } from 'node:crypto'
 import { useLocalAccounts } from '../app/composables/useLocalAccounts'
-import { useDemoStore } from '../app/composables/useDemoStore'
+import { createDemoDatabase, useDemoStore } from '../app/composables/useDemoStore'
 
 beforeEach(() => {
   const states = new Map<string, ReturnType<typeof ref>>()
@@ -17,6 +17,38 @@ beforeEach(() => {
 })
 
 describe('local workshop accounts', () => {
+  it('upgrades existing flat demo notes without losing text or edit dates', async () => {
+    const accounts = useLocalAccounts(); await accounts.initialize()
+    const saved = JSON.parse(JSON.stringify(createDemoDatabase()))
+    saved.comments = [{ id: 'old-note', project_id: 'demo-gios', log_id: null, author_user_id: 'demo-user', author_display_name: 'Demo builder', content: 'Existing workshop note', created_at: '2026-10-01T10:00:00Z', updated_at: '2026-10-01T10:00:00Z' }]
+    localStorage.setItem('buildlog-demo-v5', JSON.stringify(saved))
+    const demo = useDemoStore(); demo.initialize()
+    const note = demo.socialEntries('demo-gios', null).comments[0]!
+    expect(note).toMatchObject({ content: 'Existing workshop note', parent_id: null, thread_id: 'old-note', deleted_at: null, updated_at: '2026-10-01T10:00:00Z' })
+    demo.saveComment('demo-gios', null, 'A new answer', undefined, note.id)
+    expect(demo.socialEntries('demo-gios', null).comments.find(entry => entry.content === 'A new answer')?.thread_id).toBe('old-note')
+  })
+  it('groups replies by root, preserves answers after removal and rejects other targets', async () => {
+    const accounts = useLocalAccounts(); await accounts.initialize()
+    const demo = useDemoStore(); demo.initialize()
+    demo.saveComment('demo-gios', null, 'Original question')
+    const root = demo.socialEntries('demo-gios', null).comments[0]!
+    demo.saveComment('demo-gios', null, 'First answer', undefined, root.id)
+    const reply = demo.socialEntries('demo-gios', null).comments.find(note => note.content === 'First answer')!
+    demo.saveComment('demo-gios', null, 'A follow-up', undefined, reply.id)
+    const followUp = demo.socialEntries('demo-gios', null).comments.find(note => note.content === 'A follow-up')!
+    expect(reply.parent_id).toBe(root.id); expect(followUp.parent_id).toBe(reply.id)
+    expect(followUp.thread_id).toBe(root.id)
+    expect(() => demo.saveComment('demo-peugeot', null, 'Wrong build', undefined, root.id)).toThrow('same workshop')
+    expect(() => demo.saveComment('demo-gios', 'gios-log-1', 'Wrong session', undefined, root.id)).toThrow('same workshop')
+    demo.removeComment('demo-gios', null, root.id)
+    expect(root.content).toBe(''); expect(root.deleted_at).toBeTruthy()
+    expect(demo.socialEntries('demo-gios', null).comments.filter(note => !note.deleted_at)).toHaveLength(2)
+    expect(() => demo.saveComment('demo-gios', null, 'Restore', root.id)).toThrow('available')
+    expect(() => demo.saveComment('demo-gios', null, 'Removed target', undefined, root.id)).toThrow('available')
+    demo.saveComment('demo-gios', null, 'Reply in surviving conversation', undefined, reply.id)
+    expect(demo.socialEntries('demo-gios', null).comments.filter(note => !note.deleted_at)).toHaveLength(3)
+  })
   it('keeps social access separate from editing and handles moderation and deletion', async () => {
     const accounts = useLocalAccounts(); await accounts.initialize()
     const demo = useDemoStore(); demo.initialize()
@@ -45,7 +77,7 @@ describe('local workshop accounts', () => {
     expect(retained.author_display_name).toBe('Former builder')
     expect(demo.socialEntries('demo-gios', 'gios-log-1').approvals.some(entry => entry.user_id === readerId)).toBe(false)
     demo.removeComment('demo-gios', 'gios-log-1', retained.id)
-    expect(demo.socialEntries('demo-gios', 'gios-log-1').comments).toHaveLength(0)
+    expect(demo.socialEntries('demo-gios', 'gios-log-1').comments.filter(entry => !entry.deleted_at)).toHaveLength(0)
     demo.saveComment('demo-gios', 'gios-log-1', 'Log-only note'); demo.deleteLog('gios-log-1')
     expect(demo.socialEntries('demo-gios', null).comments).toHaveLength(1)
     expect(() => demo.socialEntries('demo-gios', 'gios-log-1')).toThrow('unavailable')

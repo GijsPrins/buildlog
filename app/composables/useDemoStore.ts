@@ -318,6 +318,9 @@ export function useDemoStore() {
       }
     }
     database.value.comments ??= []
+    for (const note of database.value.comments) {
+      note.parent_id ??= null; note.thread_id ??= note.id; note.deleted_at ??= null
+    }
     database.value.approvals ??= []
     database.value.items ??= []
     database.value.projectItems ??= []
@@ -709,16 +712,19 @@ export function useDemoStore() {
     if (!approved) database.value.approvals = database.value.approvals!.filter(entry => !(entry.project_id === projectId && entry.log_id === logId && entry.user_id === userId))
     persist()
   }
-  function saveComment(projectId: string, logId: string | null, content: string, id?: string) {
+  function saveComment(projectId: string, logId: string | null, content: string, id?: string, parentId: string | null = null) {
     socialTarget(projectId, logId, true)
     const text = normalizeComment(content), account = accounts.current.value!
     if (id) {
       const entry = socialEntries(projectId, logId).comments.find(entry => entry.id === id)
-      if (!entry || entry.author_user_id !== account.id) throw new Error('Only the writer can edit this note.')
+      if (!entry || entry.deleted_at || entry.author_user_id !== account.id) throw new Error('Only the writer can edit this available note.')
       entry.content = text; entry.updated_at = new Date().toISOString()
     } else {
       const now = new Date().toISOString()
-      database.value.comments!.push({ id: crypto.randomUUID(), project_id: projectId, log_id: logId, author_user_id: account.id, author_display_name: account.name, content: text, created_at: now, updated_at: now })
+      const parent = parentId ? socialEntries(projectId, logId).comments.find(entry => entry.id === parentId && !entry.deleted_at) : null
+      if (parentId && !parent) throw new Error('Reply to an available note in the same workshop conversation.')
+      const noteId = crypto.randomUUID()
+      database.value.comments!.push({ id: noteId, project_id: projectId, log_id: logId, parent_id: parentId, thread_id: parent?.thread_id || noteId, deleted_at: null, author_user_id: account.id, author_display_name: account.name, content: text, created_at: now, updated_at: now })
     }
     persist()
   }
@@ -726,7 +732,7 @@ export function useDemoStore() {
     socialTarget(projectId, logId, true)
     const entry = socialEntries(projectId, logId).comments.find(entry => entry.id === id)
     if (!entry || (entry.author_user_id !== accounts.current.value!.id && accounts.role(projectId) !== 'owner')) throw new Error('You cannot remove this note.')
-    database.value.comments = database.value.comments!.filter(entry => entry.id !== id)
+    entry.content = ''; entry.deleted_at ??= new Date().toISOString(); entry.updated_at = entry.deleted_at
     persist()
   }
 

@@ -41,8 +41,7 @@ update public.workshop_comments set content='Corrected reader note' where conten
 insert into social_results select 'writer edits own note',count(*)=1 from public.workshop_comments where content='Corrected reader note';
 with changed as (update public.workshop_comments set content='Unauthorized' where content='Owner note' returning id)
 insert into social_results select 'reader cannot edit another writer',count(*)=0 from changed;
-with removed as (delete from public.workshop_comments where content='Owner note' returning id)
-insert into social_results select 'reader cannot remove another writer',count(*)=0 from removed;
+insert into social_results select 'reader cannot remove another writer',pg_temp.social_denied('select public.remove_workshop_comment(id) from public.workshop_comments where content=''Owner note''','42501');
 insert into social_results select 'cannot reassign comment identity/target',pg_temp.social_denied('update public.workshop_comments set log_id=null', '42501');
 insert into social_results select 'cannot spoof displayed author',pg_temp.social_denied('insert into public.workshop_comments(project_id,author_user_id,author_display_name,content) select private_id,reader_id,''Owner'',''Spoof'' from social_ids','42501');
 insert into social_results select 'cannot spoof author identity',pg_temp.social_denied('insert into public.workshop_comments(project_id,author_user_id,content) select private_id,owner_id,''Spoof'' from social_ids','42501');
@@ -80,8 +79,8 @@ insert into social_results select 'anonymous writes denied',pg_temp.social_denie
 reset role;
 set local role authenticated;
 select set_config('request.jwt.claim.sub',(select owner_id::text from social_ids),true);
-with removed as (delete from public.workshop_comments where content='Corrected reader note' returning id)
-insert into social_results select 'owner moderates comments',count(*)=1 from removed;
+select public.remove_workshop_comment(id) from public.workshop_comments where content='Corrected reader note';
+insert into social_results select 'owner moderates comments',exists(select 1 from public.workshop_comments where author_user_id=(select reader_id from social_ids) and log_id is null and deleted_at is not null and content='');
 with removed as (delete from public.workshop_approvals where user_id=(select reader_id from social_ids) returning id)
 insert into social_results select 'owner cannot withdraw someone elses stamp',count(*)=0 from removed;
 

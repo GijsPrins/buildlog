@@ -10,11 +10,19 @@ export interface WorkshopComment {
   id: string
   project_id: string
   log_id: string | null
+  parent_id: string | null
+  thread_id: string
+  deleted_at: string | null
   author_user_id: string | null
   author_display_name: string
   content: string
   created_at: string
   updated_at: string
+}
+
+export interface WorkshopThread extends WorkshopComment { reply_count: number }
+export interface WorkshopReply extends WorkshopComment {
+  parent?: Pick<WorkshopComment, 'id' | 'author_display_name' | 'content' | 'deleted_at'> | null
 }
 
 export interface WorkshopApproval {

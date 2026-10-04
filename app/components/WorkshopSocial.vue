@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { WorkshopComment } from '~/utils/workshopSocial'
+import type { WorkshopComment, WorkshopThread, WorkshopReply } from '~/utils/workshopSocial'
 import { commentLimit, normalizeComment } from '~/utils/workshopSocial'
 
 const props = defineProps<{ projectId: string; logId?: string; compact?: boolean; discussionTo?: string }>()
@@ -18,7 +18,10 @@ const approvalCount = ref<number | null>(null)
 const commentCount = ref<number | null>(null)
 const approved = ref(false)
 const owner = ref(false)
-const comments = ref<WorkshopComment[]>([])
+const comments = ref<WorkshopThread[]>([])
+const replies = ref<Record<string, { rows: WorkshopReply[]; hasMore: boolean }>>({})
+const replyTarget = ref<WorkshopComment | null>(null)
+const replyDraft = ref('')
 const hasMore = ref(false)
 const draft = ref('')
 const editingId = ref('')
@@ -29,27 +32,73 @@ const subject = computed(() => props.logId ? 'session' : 'project')
 let generation = 0
 const pageSize = 20
 
-function target(table: 'workshop_comments' | 'workshop_approvals', head = false) {
+function target(table: 'workshop_comments' | 'workshop_approvals' | 'workshop_threads', head = false) {
   const query = useSupabase()!.from(table).select('*', { count: 'exact', head }).eq('project_id', props.projectId)
   return props.logId ? query.eq('log_id', props.logId) : query.is('log_id', null)
 }
 
 async function readComments(more: boolean, current: number) {
-  let rows: WorkshopComment[]
+  let rows: WorkshopThread[]
+  const amount = more ? pageSize : Math.max(pageSize, comments.value.length)
   if (demoMode.value) {
     const all = demo.socialEntries(props.projectId, props.logId || null).comments
-    rows = all.slice(more ? comments.value.length : 0, (more ? comments.value.length : 0) + pageSize + 1)
+    const roots = all.filter(note => !note.parent_id).map(note => ({ ...note, reply_count: all.filter(reply => reply.thread_id === note.id && reply.parent_id && !reply.deleted_at).length })).filter(note => !note.deleted_at || note.reply_count > 0)
+    rows = roots.slice(more ? comments.value.length : 0, (more ? comments.value.length : 0) + amount + 1)
   } else {
-    let query = target('workshop_comments').order('created_at', { ascending: false }).order('id', { ascending: false }).limit(pageSize + 1)
+    let query = target('workshop_threads').order('created_at', { ascending: false }).order('id', { ascending: false }).limit(amount + 1)
     const cursor = more ? comments.value.at(-1) : null
     if (cursor) query = query.or(`created_at.lt.${cursor.created_at},and(created_at.eq.${cursor.created_at},id.lt.${cursor.id})`)
     const result = await query
     if (result.error) throw result.error
-    rows = (result.data || []) as WorkshopComment[]
+    rows = (result.data || []) as WorkshopThread[]
   }
   if (current !== generation) return
-  hasMore.value = rows.length > pageSize
-  comments.value = more ? [...comments.value, ...rows.slice(0, pageSize)] : rows.slice(0, pageSize)
+  hasMore.value = rows.length > amount
+  comments.value = more ? [...comments.value, ...rows.slice(0, amount)] : rows.slice(0, amount)
+}
+
+async function readReplies(threadId: string, more: boolean, current: number) {
+  const existing = replies.value[threadId]
+  const amount = more ? pageSize : Math.max(pageSize, existing?.rows.length || 0)
+  let rows: WorkshopReply[]
+  if (demoMode.value) {
+    const all = demo.socialEntries(props.projectId, props.logId || null).comments
+    const matching = all.filter(note => note.thread_id === threadId && note.parent_id && !note.deleted_at).map(note => ({ ...note, parent: all.find(parent => parent.id === note.parent_id) }))
+    rows = matching.slice(more ? existing?.rows.length || 0 : 0, (more ? existing?.rows.length || 0 : 0) + amount + 1)
+  } else {
+    let query = useSupabase()!.from('workshop_comments').select('*').eq('project_id', props.projectId).eq('thread_id', threadId).not('parent_id', 'is', null).is('deleted_at', null).order('created_at', { ascending: false }).order('id', { ascending: false }).limit(amount + 1)
+    const cursor = more ? existing?.rows.at(-1) : null
+    if (cursor) query = query.or(`created_at.lt.${cursor.created_at},and(created_at.eq.${cursor.created_at},id.lt.${cursor.id})`)
+    const result = await query
+    if (result.error) throw result.error
+    rows = (result.data || []) as WorkshopReply[]
+    if (current !== generation) return
+    const parentIds = [...new Set(rows.flatMap(note => note.parent_id ? [note.parent_id] : []))]
+    if (parentIds.length) {
+      // Fetch only the referenced parents, preserving RLS on both reads.
+      const parents = await useSupabase()!.from('workshop_comments').select('id,author_display_name,content,deleted_at').eq('project_id', props.projectId).in('id', parentIds)
+      if (parents.error) throw parents.error
+      const byId = new Map((parents.data || []).map(parent => [parent.id, parent]))
+      rows = rows.map(note => ({ ...note, parent: byId.get(note.parent_id!) || null }))
+    }
+  }
+  if (current === generation) replies.value[threadId] = { rows: more ? [...existing!.rows, ...rows.slice(0, amount)] : rows.slice(0, amount), hasMore: rows.length > amount }
+}
+
+async function expand(threadId: string, more = false) {
+  if (busy.value) return
+  const current = generation
+  busy.value = true; error.value = ''
+  try { await readReplies(threadId, more, current) }
+  catch { if (current === generation) error.value = 'Could not load the replies. Try again.' }
+  finally { if (current === generation) busy.value = false }
+}
+
+async function startReply(note: WorkshopComment) {
+  replyTarget.value = note; editingId.value = ''; removingId.value = ''
+  if (!replies.value[note.thread_id]) await expand(note.thread_id)
+  await nextTick()
+  document.getElementById(`${fieldId}-reply`)?.focus()
 }
 
 async function load() {
@@ -59,13 +108,13 @@ async function load() {
     if (demoMode.value) {
       const entries = demo.socialEntries(props.projectId, props.logId || null)
       approvalCount.value = entries.approvals.length
-      commentCount.value = entries.comments.length
+      commentCount.value = entries.comments.filter(note => !note.deleted_at).length
       approved.value = entries.approvals.some(entry => entry.user_id === auth.user.value?.id)
       owner.value = local.role(props.projectId) === 'owner'
     } else {
       const userId = auth.user.value?.id
       const [approvals, notes, mine, membership] = await Promise.all([
-        target('workshop_approvals', true), target('workshop_comments', true),
+        target('workshop_approvals', true), target('workshop_comments', true).is('deleted_at', null),
         userId ? target('workshop_approvals').eq('user_id', userId).maybeSingle() : Promise.resolve({ data: null, error: null }),
         userId && !props.compact ? useSupabase()!.from('project_members').select('role').eq('project_id', props.projectId).eq('user_id', userId).maybeSingle() : Promise.resolve({ data: null, error: null })
       ])
@@ -76,7 +125,10 @@ async function load() {
       approved.value = Boolean(mine.data)
       owner.value = membership.data?.role === 'owner'
     }
-    if (!props.compact) await readComments(false, current)
+    if (!props.compact) {
+      await readComments(false, current)
+      await Promise.all(comments.value.filter(note => replies.value[note.id]).map(note => readReplies(note.id, false, current)))
+    }
   } catch (cause) {
     if (current === generation) { approvalCount.value = null; commentCount.value = null; comments.value = []; error.value = cause instanceof Error ? cause.message : 'Could not open the workshop conversation.' }
   } finally { if (current === generation) loading.value = false }
@@ -108,21 +160,23 @@ async function toggleApproval() {
   })
 }
 
-async function save(id?: string) {
+async function save(id?: string, asReply = false) {
   if (!auth.user.value) return
   const projectId = props.projectId, logId = props.logId || null, userId = auth.user.value.id, current = generation
   await run(async () => {
-    const content = normalizeComment(id ? editText.value : draft.value)
-    if (demoMode.value) demo.saveComment(projectId, logId, content, id)
+    const parentId = asReply ? replyTarget.value?.id || null : null
+    if (asReply && !parentId) throw new Error('Choose a note to reply to.')
+    const content = normalizeComment(id ? editText.value : asReply ? replyDraft.value : draft.value)
+    if (demoMode.value) demo.saveComment(projectId, logId, content, id, parentId)
     else {
       const result = id
         ? await useSupabase()!.from('workshop_comments').update({ content }).eq('id', id).eq('project_id', projectId).select('id').single()
-        : await useSupabase()!.from('workshop_comments').insert({ project_id: projectId, log_id: logId, author_user_id: userId, content }).select('id').single()
+        : await useSupabase()!.from('workshop_comments').insert({ project_id: projectId, log_id: logId, author_user_id: userId, content, parent_id: parentId }).select('id').single()
       if (result.error) throw result.error
     }
     if (current !== generation) return
-    if (id) { editingId.value = ''; editText.value = '' } else draft.value = ''
-    message.value = id ? 'Workshop note updated.' : 'Your note is on the bench.'
+    if (id) { editingId.value = ''; editText.value = '' } else if (asReply) { replyDraft.value = ''; replyTarget.value = null } else draft.value = ''
+    message.value = id ? 'Workshop note updated.' : asReply ? 'Your reply is on the bench.' : 'Your note is on the bench.'
   })
 }
 
@@ -131,10 +185,14 @@ async function remove(id: string) {
   await run(async () => {
     if (demoMode.value) demo.removeComment(projectId, logId, id)
     else {
-      const result = await useSupabase()!.from('workshop_comments').delete().eq('id', id).eq('project_id', projectId).select('id').single()
+      const result = await useSupabase()!.rpc('remove_workshop_comment', { p_comment_id: id })
       if (result.error) throw result.error
     }
-    if (current === generation) { removingId.value = ''; message.value = 'Workshop note removed.' }
+    if (current === generation) {
+      removingId.value = ''; message.value = 'Workshop note removed.'
+      if (replyTarget.value?.id === id) { replyTarget.value = null; replyDraft.value = '' }
+      if (editingId.value === id) { editingId.value = ''; editText.value = '' }
+    }
   })
 }
 
@@ -148,7 +206,7 @@ async function more() {
 }
 
 function reset() {
-  generation++; comments.value = []; draft.value = ''; editText.value = ''; editingId.value = ''; removingId.value = ''
+  generation++; comments.value = []; replies.value = {}; replyTarget.value = null; replyDraft.value = ''; draft.value = ''; editText.value = ''; editingId.value = ''; removingId.value = ''
   approvalCount.value = null; commentCount.value = null; approved.value = false; owner.value = false; busy.value = false; error.value = ''; message.value = ''; hasMore.value = false
   void load()
 }
@@ -187,19 +245,22 @@ onBeforeUnmount(() => { generation++ })
       <p v-else><NuxtLink :to="signInTo">Sign in to join the bench →</NuxtLink></p>
       <p v-if="!loading && !error && !comments.length" class="muted">The bench is quiet. Leave the first note.</p>
       <div class="workshop-social__notes">
-        <article v-for="note in comments" :key="note.id">
-          <header><strong>{{ note.author_display_name }}</strong><time :datetime="note.created_at">{{ formatProjectDate(note.created_at.slice(0, 10)) }}</time><small v-if="note.updated_at !== note.created_at">Edited</small></header>
-          <form v-if="editingId === note.id" class="workshop-social__form" @submit.prevent="save(note.id)">
-            <label :for="`${fieldId}-edit`">Edit your workshop note</label><textarea :id="`${fieldId}-edit`" v-model="editText" :maxlength="commentLimit" :disabled="busy" required />
-            <div><button type="submit" class="button" :disabled="busy || !editText.trim()">Save note</button><button type="button" class="button button--ghost" :disabled="busy" @click="editingId = ''">Cancel edit</button></div>
+        <WorkshopNote v-for="note in comments" :key="note.id" :note="note" :user-id="auth.user.value?.id" :owner="owner" :busy="busy" :editing="editingId === note.id" :removing="removingId === note.id" v-model:edit-text="editText" @reply="startReply" @edit="editingId = $event.id; editText = $event.content; replyTarget = null" @cancel-edit="editingId = ''" @save="save" @request-removal="removingId = $event" @remove="remove" @cancel-removal="removingId = ''">
+          <form v-if="replyTarget?.thread_id === note.id" class="workshop-social__form workshop-social__reply-form" @submit.prevent="save(undefined, true)">
+            <label :for="`${fieldId}-reply`">Reply to {{ replyTarget.author_display_name }}</label>
+            <p class="workshop-social__reply-context">“{{ replyTarget.content.slice(0, 120) }}{{ replyTarget.content.length > 120 ? '…' : '' }}”</p>
+            <textarea :id="`${fieldId}-reply`" v-model="replyDraft" :maxlength="commentLimit" :disabled="busy" required placeholder="Keep the conversation going…" />
+            <div><button type="submit" class="button" :disabled="busy || !replyDraft.trim()">Leave reply</button><button type="button" class="button button--ghost" :disabled="busy" @click="replyTarget = null; replyDraft = ''">Cancel reply</button></div>
           </form>
-          <p v-else class="workshop-social__content">{{ note.content }}</p>
-          <div v-if="auth.user.value && (note.author_user_id === auth.user.value.id || owner)" class="workshop-social__note-actions">
-            <button v-if="note.author_user_id === auth.user.value.id && editingId !== note.id" type="button" :disabled="busy" @click="editingId = note.id; editText = note.content">Edit note</button>
-            <template v-if="removingId === note.id"><span>Remove this note?</span><button type="button" :disabled="busy" @click="remove(note.id)">Confirm removal</button><button type="button" :disabled="busy" @click="removingId = ''">Keep note</button></template>
-            <button v-else type="button" :disabled="busy" @click="removingId = note.id">{{ note.author_user_id === auth.user.value.id ? 'Remove note' : 'Remove note as owner' }}</button>
+          <div v-if="note.reply_count || replies[note.id]?.rows.length" class="workshop-social__replies">
+            <button v-if="!replies[note.id]" type="button" class="button button--ghost" :disabled="busy" @click="expand(note.id)">View {{ note.reply_count }} {{ note.reply_count === 1 ? 'reply' : 'replies' }}</button>
+            <template v-else>
+              <p class="eyebrow">Replies · newest first</p>
+              <WorkshopNote v-for="reply in replies[note.id]!.rows" :key="reply.id" :note="reply" :user-id="auth.user.value?.id" :owner="owner" :busy="busy" :editing="editingId === reply.id" :removing="removingId === reply.id" v-model:edit-text="editText" @reply="startReply" @edit="editingId = $event.id; editText = $event.content; replyTarget = null" @cancel-edit="editingId = ''" @save="save" @request-removal="removingId = $event" @remove="remove" @cancel-removal="removingId = ''" />
+              <button v-if="replies[note.id]!.hasMore" type="button" class="button button--ghost" :disabled="busy" @click="expand(note.id, true)">More replies</button>
+            </template>
           </div>
-        </article>
+        </WorkshopNote>
       </div>
       <button v-if="hasMore" type="button" class="button button--ghost" :disabled="busy" @click="more">More workshop notes</button>
     </template>
@@ -221,12 +282,7 @@ onBeforeUnmount(() => { generation++ })
 .workshop-social__form textarea { min-height: 6rem; width: 100%; padding: .8rem; border: 1px solid var(--project-border, var(--line)); background: var(--project-background, var(--surface)); color: inherit; font: inherit; resize: vertical; }
 .workshop-social__form .button { justify-self: start; }
 .workshop-social__form .button--ghost { background: transparent; color: inherit; }
-.workshop-social__notes article { padding: 1.25rem 0; border-top: 1px dashed var(--project-border, var(--line)); }
-.workshop-social__notes header { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem 1rem; }
-.workshop-social__notes header strong { min-width: 0; overflow-wrap: anywhere; }
-.workshop-social__notes time, .workshop-social__notes small { font-size: .8rem; }
-.workshop-social__content { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.6; }
-.workshop-social__note-actions { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
-.workshop-social__note-actions button { min-height: 44px; padding: .5rem .7rem; border: 1px solid var(--project-border, var(--line)); background: transparent; color: inherit; cursor: pointer; }
 @media (max-width: 600px) { .workshop-social { scroll-margin-top: 10rem; } }
+.workshop-social__replies { padding-left: clamp(.6rem, 2vw, 1.25rem); margin-top: 1rem; border-left: 2px solid var(--project-border, var(--line)); }
+.workshop-social__reply-context { margin: 0; overflow-wrap: anywhere; font-size: .85rem; }
 </style>
