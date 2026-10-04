@@ -16,6 +16,23 @@ const loading = ref(true)
 const busy = ref(false)
 const errorMessage = ref('')
 
+const deleting = ref(false)
+const deleteConfirmation = ref('')
+const deletionConfirmed = computed(() => Boolean(log.value) && deleteConfirmation.value.trim().toLowerCase() === log.value!.title.trim().toLowerCase())
+async function deleteLog() {
+  if (!log.value || !canEdit.value || !deletionConfirmed.value) return
+  busy.value = true; errorMessage.value = ''
+  try {
+    if (demoMode.value) demo.deleteLog(log.value.id)
+    else {
+      const { error } = await useSupabase()!.from('logs').delete().eq('id', log.value.id).eq('project_id', project.value!.id).select('id').single()
+      if (error) throw error
+    }
+    await navigateTo(`/projects/${slug.value}`)
+  } catch (cause) { errorMessage.value = cause instanceof Error ? cause.message : 'Could not delete log.' }
+  finally { busy.value = false }
+}
+
 const title = ref('')
 const phaseId = ref('')
 const workDate = ref('')
@@ -234,5 +251,16 @@ watch(() => route.query.edit, value => { editing.value = value === '1'; if (edit
       <p v-if="errorMessage" class="form-error">{{ errorMessage }}</p>
       <footer class="builder-submit"><div><p class="eyebrow">Archive correction</p><strong>The original work date remains part of the record.</strong></div><div><NuxtLink class="button button--ghost" :to="`/projects/${slug}/logs/${logSlug}`">Cancel</NuxtLink><button class="button" type="submit" :disabled="busy">{{ busy ? 'Updating work order…' : 'Save corrected work order →' }}</button></div></footer>
     </form>
+    <section v-if="canEdit" class="form-card">
+      <button v-if="!deleting" type="button" class="button button--ghost" @click="deleting = true">Delete work order</button>
+      <template v-else>
+        <h2>Delete this work order?</h2>
+        <p>This permanently removes the log, its recorded time and item usage costs. Item purchases and statuses stay unchanged. Original photos stay with the project, including its cover.</p>
+        <label class="field">Type the log title to confirm: {{ log.title }}<input v-model="deleteConfirmation" :disabled="busy" autocomplete="off"></label>
+        <button type="button" class="button" :disabled="busy || !deletionConfirmed" @click="deleteLog">Confirm delete</button>
+        <button type="button" class="button button--ghost" :disabled="busy" @click="deleting = false; deleteConfirmation = ''">Keep work order</button>
+      </template>
+      <p v-if="errorMessage && deleting" class="form-error" role="alert">{{ errorMessage }}</p>
+    </section>
   </div>
 </template>

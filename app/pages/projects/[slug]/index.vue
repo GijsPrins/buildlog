@@ -250,6 +250,10 @@ onMounted(loadProject)
       </ol>
     </section>
 
+    <section v-if="images.some(image => !image.log_id)" class="project-photo-archive">
+      <h2>Project photo archive</h2>
+      <div class="photo-grid"><figure v-for="image in images.filter(image => !image.log_id)" :key="image.id"><img :src="image.signedUrl" :alt="image.caption || 'Project photo'"><figcaption>{{ image.caption || image.role }}</figcaption></figure></div>
+    </section>
     <ProjectFinancials v-if="project.cost_tracking_enabled" :items="projectItems" :usages="logItemUsage" :currency="project.currency_code" />
     <section v-if="project.items_enabled" class="project-materials-section" aria-labelledby="project-materials-heading">
       <header class="project-section-marker">

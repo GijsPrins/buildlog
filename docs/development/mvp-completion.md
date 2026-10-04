@@ -22,7 +22,8 @@ The live migration is additive. Database verification uses temporary fixture acc
 - [x] Removal via an explicit `removed` status, preserving ledger links and log history. Permanent unlink/delete is not exposed.
 - [ ] Workshop-wide deduplicated expenditure, currency-grouped totals and full estimate editing.
 - [x] Project specifications dossier: generic sections, facts, notes, sources, ordering, editor permissions and optional Bicycle Restoration suggestions.
-- [ ] Ordinary ownership-transfer UI and log deletion.
+- [x] Ownership transfer to an existing member with email confirmation; previous owner becomes Contributor.
+- [x] Log deletion with title confirmation; usage/time removed, originals retained in the project photo archive and cover preserved.
 - [ ] Multiple editable finding/decision pairs and visible log authorship.
 - [ ] Generic completion state instead of interpreting phase names.
 - [ ] Complete template definition, body-font control and representative theme preview.

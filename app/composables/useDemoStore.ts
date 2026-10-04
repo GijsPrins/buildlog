@@ -569,6 +569,16 @@ export function useDemoStore() {
     return log
   }
 
+  function deleteLog(logId: string) {
+    const log = database.value.logs.find(entry => entry.id === logId)
+    if (!log) throw new Error('Log unavailable.')
+    accounts.requireRole(log.project_id)
+    database.value.logs = database.value.logs.filter(entry => entry.id !== logId)
+    database.value.logItemUsage = database.value.logItemUsage.filter(entry => entry.log_id !== logId)
+    for (const image of database.value.images) if (image.log_id === logId) image.log_id = null
+    persist()
+  }
+
   function updateLog(input: DemoLogUpdateInput) {
     const targetLog = database.value.logs.find(log => log.id === input.logId)
     if (!targetLog) throw new Error('Log not found.')
@@ -631,5 +641,5 @@ export function useDemoStore() {
     persist()
   }
 
-  return { listSpecifications, saveSpecification, deleteSpecification, ownedItems, linkOwnedItem, editLedgerEntry, editOwnedItem, deleteLocalAccount, initialize, listProjects, getProject, getLog, listProjectItems, listProjectLogUsage, createProject, updateProject, setItemAllocation, addProjectItem, addLog, updateLog, reset }
+  return { deleteLog, listSpecifications, saveSpecification, deleteSpecification, ownedItems, linkOwnedItem, editLedgerEntry, editOwnedItem, deleteLocalAccount, initialize, listProjects, getProject, getLog, listProjectItems, listProjectLogUsage, createProject, updateProject, setItemAllocation, addProjectItem, addLog, updateLog, reset }
 }

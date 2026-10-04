@@ -78,6 +78,16 @@ export function useLocalAccounts() {
   }
   function removeMember(projectId: string, userId: string) { requireRole(projectId, true); state.value.members = state.value.members.filter(member => !(member.projectId === projectId && member.userId === userId && member.role !== 'owner')); persist() }
   function cancelInvitation(projectId: string, id: string) { requireRole(projectId, true); state.value.invitations = state.value.invitations.filter(invitation => !(invitation.projectId === projectId && invitation.id === id)); persist() }
+  function transferOwnership(projectId: string, successorId: string) {
+    requireRole(projectId, true)
+    const previous = state.value.members.find(member => member.projectId === projectId && member.role === 'owner')!
+    const successor = state.value.members.find(member => member.projectId === projectId && member.userId === successorId)
+    if (!successor) throw new Error('The new owner must already be a project member.')
+    if (previous === successor) return
+    previous.role = 'contributor'; successor.role = 'owner'
+    persist()
+  }
+
   function deleteAccount(transfers: Record<string, string>, deleteProjects: boolean) {
     const account = current.value
     if (!account) throw new Error('Sign in first.')
@@ -93,5 +103,5 @@ export function useLocalAccounts() {
     state.value.accounts = state.value.accounts.filter(other => other.id !== account.id); state.value.sessionId = null; persist()
     return owned.map(member => member.projectId)
   }
-  return { state, current, initialize, role, canWrite, requireRole, ensureOwners, addOwner, register, signIn, signOut, members, addMember, removeMember, cancelInvitation, deleteAccount }
+  return { transferOwnership, state, current, initialize, role, canWrite, requireRole, ensureOwners, addOwner, register, signIn, signOut, members, addMember, removeMember, cancelInvitation, deleteAccount }
 }

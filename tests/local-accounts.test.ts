@@ -17,6 +17,39 @@ beforeEach(() => {
 })
 
 describe('local workshop accounts', () => {
+  it('transfers ownership to a member and revokes the previous owner administration rights', async () => {
+    const accounts = useLocalAccounts(); await accounts.initialize()
+    const demo = useDemoStore(); demo.initialize()
+    const project = demo.listProjects()[0]!
+    await accounts.register('Successor', 'successor@example.test', 'Workshop2026!')
+    const successor = accounts.current.value!.id
+    await accounts.signIn('builder@buildlog.local', 'Workshop2026!')
+    expect(() => accounts.transferOwnership(project.id, successor)).toThrow('member')
+    accounts.addMember(project.id, 'successor@example.test', 'reader')
+    accounts.transferOwnership(project.id, successor)
+    expect(accounts.members(project.id).filter(member => member.role === 'owner')).toHaveLength(1)
+    expect(accounts.role(project.id)).toBe('contributor')
+    expect(() => accounts.transferOwnership(project.id, 'demo-user')).toThrow('permission')
+    await accounts.signIn('successor@example.test', 'Workshop2026!')
+    expect(accounts.role(project.id)).toBe('owner')
+  })
+  it('deletes a log and usage while retaining photos, cover and purchases', async () => {
+    const accounts = useLocalAccounts(); await accounts.initialize()
+    const demo = useDemoStore(); demo.initialize()
+    const project = demo.getProject('gios-torino-restoration')!
+    const target = project.logs[0]!
+    const photos = project.images.filter(image => image.log_id === target.id)
+    const purchases = demo.ownedItems().length
+    demo.deleteLog(target.id)
+    expect(demo.getProject(project.project.slug)?.logs.some(log => log.id === target.id)).toBe(false)
+    expect(demo.listProjectLogUsage(project.project.id).some(usage => usage.log_id === target.id)).toBe(false)
+    const retained = demo.getProject(project.project.slug)!
+    for (const photo of photos) expect(retained.images.find(image => image.id === photo.id)?.log_id).toBeNull()
+    expect(retained.project.hero_image_id).toBe(project.project.hero_image_id)
+    expect(demo.ownedItems()).toHaveLength(purchases)
+    await accounts.register('Outsider', 'log-outsider@example.test', 'Workshop2026!')
+    expect(() => demo.deleteLog('demo-log-1')).toThrow('permission')
+  })
   it('persists flexible specifications and protects private dossiers', async () => {
     const accounts = useLocalAccounts(); await accounts.initialize()
     const demo = useDemoStore(); demo.initialize()

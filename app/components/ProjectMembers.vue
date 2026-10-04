@@ -1,5 +1,6 @@
 <script setup lang="ts">
 const props = defineProps<{ projectId: string }>()
+const route = useRoute()
 const accounts = useWorkshopMembers(props.projectId)
 const demoMode = useDemoMode()
 const email = ref('')
@@ -8,6 +9,24 @@ const message = ref('')
 const error = ref('')
 const { members, invitations, busy } = accounts
 const invitationLink = ref('')
+const successor = ref('')
+const confirmation = ref('')
+const transferring = ref(false)
+const candidates = computed(() => members.value.filter(member => member.role !== 'owner'))
+async function transfer() {
+  const target = candidates.value.find(member => member.userId === successor.value)
+  if (!target || confirmation.value.trim().toLowerCase() !== target.email.toLowerCase()) return
+  transferring.value = true; error.value = ''
+  try {
+    if (demoMode.value) useLocalAccounts().transferOwnership(props.projectId, target.userId)
+    else {
+      const { error: failure } = await useSupabase()!.rpc('transfer_project_ownership', { p_project_id: props.projectId, p_new_owner_user_id: target.userId })
+      if (failure) throw failure
+    }
+    await navigateTo(route.path.replace(/\/edit\/?$/, ''))
+  } catch (cause) { error.value = cause instanceof Error ? cause.message : 'Could not transfer ownership.' }
+  finally { transferring.value = false }
+}
 onMounted(async () => {
   invitationLink.value = `${window.location.origin}${useRuntimeConfig().app.baseURL}login`
   try { await accounts.action('list') } catch (cause) { error.value = cause instanceof Error ? cause.message : 'Could not load members.' }
@@ -35,6 +54,14 @@ async function run(action: string, targetId?: string) {
       <label v-if="!demoMode && invitations.length" class="field"><span>Sign-up link to share</span><input :value="invitationLink" readonly @focus="($event.target as HTMLInputElement).select()"></label>
       <p v-if="error" class="form-error" role="alert">{{ error }}</p><p v-if="message" class="form-success" role="status">{{ message }}</p>
       <button type="button" class="button" :disabled="busy || !email.trim()" @click="run('add')">{{ busy ? 'Updating access…' : 'Add workshop member' }}</button>
+      <details>
+        <summary>Transfer project ownership</summary>
+        <p>The selected member becomes the sole owner. You remain a Contributor and lose access to project settings and membership management. Unsaved project changes are not saved by this action.</p>
+        <p v-if="!candidates.length">Add an existing member before transferring ownership. Pending invitations cannot receive ownership.</p>
+        <label class="field">New owner<select v-model="successor" :disabled="transferring" @change="confirmation = ''"><option value="">Choose an existing member</option><option v-for="member in candidates" :key="member.userId" :value="member.userId">{{ member.name }} — {{ member.email }}</option></select></label>
+        <label class="field">Type the new owner's email to confirm<input v-model="confirmation" type="email" :disabled="transferring" autocomplete="off"></label>
+        <button type="button" class="button" :disabled="transferring || busy || !successor || confirmation.trim().toLowerCase() !== candidates.find(member => member.userId === successor)?.email.toLowerCase()" @click="transfer">{{ transferring ? 'Transferring…' : 'Confirm ownership transfer' }}</button>
+      </details>
     </div>
   </section>
 </template>
