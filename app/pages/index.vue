@@ -10,7 +10,7 @@ const projects = ref<ProjectSummary[]>(demoMode.value ? demo.listProjects() : []
 const quickProjectSlug = ref('')
 const { user, initialize } = useAuth()
 
-const isCompleted = (project: ProjectSummary) => /^(done|complete|completed)$/i.test(project.currentPhase ?? '')
+const isCompleted = (project: ProjectSummary) => project.is_completed
 const activeProjects = computed(() => projects.value.filter(project => !isCompleted(project)))
 const completedProjects = computed(() => projects.value.filter(isCompleted))
 const totalMinutes = computed(() => projects.value.reduce((total, project) => total + (project.totalMinutes ?? 0), 0))
@@ -201,9 +201,9 @@ watch(() => user.value?.id, () => loadProjects())
       <div class="status-heading status-heading--quiet">
         <div>
           <span class="status-heading__number">02</span>
-          <div><p>Finished machines</p><h2 id="vault-heading">In the Vault</h2></div>
+          <div><p>Finished builds</p><h2 id="vault-heading">In the Vault</h2></div>
         </div>
-        <span>{{ completedProjects.length }} archived</span>
+        <span>{{ completedProjects.length }} completed</span>
       </div>
 
       <div v-if="completedProjects.length" class="vault-grid">

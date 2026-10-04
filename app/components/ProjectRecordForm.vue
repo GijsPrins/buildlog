@@ -23,6 +23,7 @@ const description = defineModel<string>('description', { required: true })
 const startedStory = defineModel<string>('startedStory', { required: true })
 const motivationStory = defineModel<string>('motivationStory', { required: true })
 const objectStory = defineModel<string>('objectStory', { required: true })
+const isCompleted = defineModel<boolean>('isCompleted', { default: false })
 const isPublic = defineModel<boolean>('isPublic', { required: true })
 const itemsEnabled = defineModel<boolean>('itemsEnabled', { required: true })
 const costsEnabled = defineModel<boolean>('costsEnabled', { required: true })
@@ -128,6 +129,7 @@ function archivePhase(phase: ProjectEditorPhase) {
 
     <section class="project-editor__section">
       <header class="builder-section-heading"><span>04</span><div><p class="eyebrow">Workshop rules</p><h2>Record setup</h2></div><p>The buildlog can stay simple; enable only what earns its place.</p></header>
+      <label v-if="mode === 'edit'" class="builder-toggle"><input v-model="isCompleted" type="checkbox" :disabled="busy"><span><strong>Project completed</strong><small>Move this build to the Vault. Uncheck to reopen it; phases and logs stay available.</small></span></label>
       <div class="project-editor__settings"><label class="builder-toggle"><input v-model="isPublic" type="checkbox"><span><strong>Public project</strong><small>Anyone with the address can read the project.</small></span></label><label class="builder-toggle"><input v-model="itemsEnabled" type="checkbox"><span><strong>Parts &amp; materials</strong><small>Show the BOM and connect parts to work orders.</small></span></label><label class="builder-toggle" :class="{ disabled: !itemsEnabled }"><input v-model="costsEnabled" type="checkbox" :disabled="!itemsEnabled"><span><strong>Track costs</strong><small>Optional amounts appear only while enabled.</small></span></label><label class="field"><span>Currency</span><input v-model="currencyCode" maxlength="3" pattern="[A-Za-z]{3}"></label></div>
     </section>
 

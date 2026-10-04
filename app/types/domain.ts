@@ -59,6 +59,7 @@ export interface Project {
   object_story: string | null
   current_phase_id: string | null
   hero_image_id: string | null
+  is_completed: boolean
   is_public: boolean
   currency_code: string
   items_enabled: boolean

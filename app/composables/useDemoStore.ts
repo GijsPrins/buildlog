@@ -34,6 +34,7 @@ export interface DemoProjectInput {
 }
 
 export interface DemoProjectUpdateInput {
+  isCompleted: boolean
   projectId: string
   name: string
   slug: string
@@ -246,6 +247,7 @@ export function createDemoDatabase(): DemoDatabase {
         object_story: 'The exact rides are unknown, but the chipped paint, legible graphics and well-used contact points tell their own history. It is an Italian steel racer that has already earned its marks.',
         current_phase_id: giosPhases[1]!.id,
         hero_image_id: 'gios-image-start',
+        is_completed: false,
         is_public: true,
         currency_code: 'EUR',
         items_enabled: true,
@@ -265,6 +267,7 @@ export function createDemoDatabase(): DemoDatabase {
         object_story: 'This Peugeot has clearly lived as a working bicycle, not a display piece. The rack, mixed accessories, weathered drivetrain and small scars point to years of practical use before this next chapter.',
         current_phase_id: phases[3]!.id,
         hero_image_id: 'demo-image-before',
+        is_completed: false,
         is_public: true,
         currency_code: 'EUR',
         items_enabled: false,
@@ -300,6 +303,13 @@ export function useDemoStore() {
         database.value = JSON.parse(saved) as DemoDatabase
       } catch {
         localStorage.removeItem(STORAGE_KEY)
+      }
+    }
+    for (const project of database.value.projects) {
+      // Upgrade older local demos once, preserving their former classification.
+      if (project.is_completed === undefined) {
+        const phase = database.value.phases.find(entry => entry.id === project.current_phase_id)
+        project.is_completed = /^(done|complete|completed)$/i.test(phase?.name ?? '')
       }
     }
     database.value.items ??= []
@@ -465,7 +475,7 @@ export function useDemoStore() {
     const project: Project = {
       id, slug: input.slug, name: input.name, subtitle: input.subtitle, description: input.description,
       started_story: input.startedStory, motivation_story: input.motivationStory, object_story: input.objectStory,
-      current_phase_id: input.currentPhaseIndex === null ? null : (phases[input.currentPhaseIndex]?.id ?? phases[0]?.id ?? null), hero_image_id: null, is_public: input.isPublic,
+      current_phase_id: input.currentPhaseIndex === null ? null : (phases[input.currentPhaseIndex]?.id ?? phases[0]?.id ?? null), hero_image_id: null, is_completed: false, is_public: input.isPublic,
       currency_code: input.currencyCode, items_enabled: input.itemsEnabled,
       cost_tracking_enabled: input.itemsEnabled && input.costsEnabled, theme_config: input.theme,
       created_at: now, updated_at: now
@@ -499,7 +509,7 @@ export function useDemoStore() {
     Object.assign(project, {
       name: input.name, slug: input.slug, subtitle: input.subtitle, description: input.description,
       started_story: input.startedStory, motivation_story: input.motivationStory, object_story: input.objectStory,
-      is_public: input.isPublic, items_enabled: input.itemsEnabled,
+      is_completed: input.isCompleted, is_public: input.isPublic, items_enabled: input.itemsEnabled,
       cost_tracking_enabled: input.itemsEnabled && input.costsEnabled,
       theme_config: input.theme, updated_at: now
     })

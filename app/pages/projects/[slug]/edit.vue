@@ -23,6 +23,7 @@ const description = ref('')
 const startedStory = ref('')
 const motivationStory = ref('')
 const objectStory = ref('')
+const isCompleted = ref(false)
 const isPublic = ref(false)
 const itemsEnabled = ref(false)
 const costsEnabled = ref(false)
@@ -37,7 +38,7 @@ function applyProject(projectData: Project, phaseData: ProjectPhase[], heroUrl =
   project.value = projectData; name.value = projectData.name; projectSlug.value = projectData.slug
   subtitle.value = projectData.subtitle || ''; description.value = projectData.description || ''
   startedStory.value = projectData.started_story || ''; motivationStory.value = projectData.motivation_story || ''; objectStory.value = projectData.object_story || ''
-  isPublic.value = projectData.is_public; itemsEnabled.value = projectData.items_enabled; costsEnabled.value = projectData.cost_tracking_enabled
+  isCompleted.value = projectData.is_completed; isPublic.value = projectData.is_public; itemsEnabled.value = projectData.items_enabled; costsEnabled.value = projectData.cost_tracking_enabled
   currencyCode.value = projectData.currency_code; theme.value = copyTheme(projectData.theme_config); currentHeroUrl.value = heroUrl
   phases.value = phaseData.map(phase => ({ key: phase.id, id: phase.id, name: phase.name, archived: Boolean(phase.archived_at) }))
   currentPhaseKey.value = projectData.current_phase_id
@@ -101,7 +102,7 @@ async function save() {
       const heroImage = heroFile.value ? { name: heroFile.value.name, type: heroFile.value.type || 'image/jpeg', size: heroFile.value.size, dataUrl: await fileAsDataUrl(heroFile.value) } : null
       demo.updateProject({ projectId: project.value.id, name: name.value.trim(), slug: cleanSlug, subtitle: subtitle.value.trim() || null,
         description: description.value.trim() || null, startedStory: startedStory.value.trim() || null, motivationStory: motivationStory.value.trim() || null,
-        objectStory: objectStory.value.trim() || null, isPublic: isPublic.value, itemsEnabled: itemsEnabled.value,
+        objectStory: objectStory.value.trim() || null, isCompleted: isCompleted.value, isPublic: isPublic.value, itemsEnabled: itemsEnabled.value,
         costsEnabled: itemsEnabled.value && costsEnabled.value, theme: theme.value, currentPhaseKey: currentPhaseKey.value,
         phases: usablePhases, heroImage })
     } else {
@@ -129,7 +130,7 @@ async function save() {
       const { error } = await supabase.from('projects').update({ slug: cleanSlug, name: name.value.trim(), subtitle: subtitle.value.trim() || null,
         description: description.value.trim() || null, started_story: startedStory.value.trim() || null, motivation_story: motivationStory.value.trim() || null,
         object_story: objectStory.value.trim() || null, current_phase_id: currentPhaseKey.value ? phaseIds.get(currentPhaseKey.value) || null : null,
-        hero_image_id: heroImageId || project.value.hero_image_id, is_public: isPublic.value, currency_code: currencyCode.value.toUpperCase(),
+        hero_image_id: heroImageId || project.value.hero_image_id, is_completed: isCompleted.value, is_public: isPublic.value, currency_code: currencyCode.value.toUpperCase(),
         items_enabled: itemsEnabled.value, cost_tracking_enabled: itemsEnabled.value && costsEnabled.value, theme_config: theme.value }).eq('id', project.value.id)
       if (error) throw error
     }
@@ -149,7 +150,7 @@ onBeforeUnmount(() => { if (heroPreview.value) URL.revokeObjectURL(heroPreview.v
     v-else-if="theme"
     v-model:name="name" v-model:project-slug="projectSlug" v-model:subtitle="subtitle" v-model:description="description"
     v-model:started-story="startedStory" v-model:motivation-story="motivationStory" v-model:object-story="objectStory"
-    v-model:is-public="isPublic" v-model:items-enabled="itemsEnabled" v-model:costs-enabled="costsEnabled"
+    v-model:is-completed="isCompleted" v-model:is-public="isPublic" v-model:items-enabled="itemsEnabled" v-model:costs-enabled="costsEnabled"
     v-model:currency-code="currencyCode" v-model:theme="theme" v-model:phases="phases" v-model:current-phase-key="currentPhaseKey"
     :project-id="project.id" mode="edit" :back-to="`/projects/${slugParam}`" :back-label="project.name" :current-hero-url="currentHeroUrl"
     :hero-preview="heroPreview" :busy="busy" :error-message="errorMessage" :success-message="successMessage"

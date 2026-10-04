@@ -6,11 +6,11 @@ Updated 4 October 2026. Social features remain outside this work.
 
 Repository: `GijsPrins/buildlog`, branch `main`, Nuxt 4 + Supabase, deployed by Pages on push. Live project: `wymnzbcnbvixnspykvlu`. Public configuration is in GitHub Actions Variables. Originals stay in private Storage; the browser uses signed URLs and RLS.
 
-Completed: password recovery, per-photo captions/types, draft preservation during ledger navigation, usage quantity/cost separation, project financial foundations, shared item editing/reuse, specifications dossier, confirmed ownership transfer and log deletion preserving original photos. Latest delivery: multiple editable findings/decisions and visible log authorship (following `8adbf57`).
+Completed: password recovery, per-photo captions/types, draft preservation during ledger navigation, usage quantity/cost separation, project financial foundations, shared item editing/reuse, specifications dossier, confirmed ownership transfer and log deletion preserving original photos. Latest delivery: explicit project completion and reopening (following `6569d0f`).
 
 Validation before each delivery: relevant application tests, Nuxt typecheck/static generate, isolated demo browser flow, and rollback-only live database checks for permissions or relational changes. Do not use real user records for destructive tests. Push verified work to `main` as authorized in this chat.
 
-Next delivery: generic completion state instead of interpreting phase names. The checklist below remains the source for unfinished MVP work. No social features yet.
+Next delivery: complete template definition, body-font control and representative theme preview. The checklist below remains the source for unfinished MVP work. No social features yet.
 
 ## First delivery: quantities and financial foundations
 
@@ -35,7 +35,7 @@ The live migration is additive. Database verification uses temporary fixture acc
 - [x] Ownership transfer to an existing member with email confirmation; previous owner becomes Contributor.
 - [x] Log deletion with title confirmation; usage/time removed, originals retained in the project photo archive and cover preserved.
 - [x] Multiple editable finding/decision pairs and visible log authorship, including former project members.
-- [ ] Generic completion state instead of interpreting phase names.
+- [x] Explicit project completion/reopening by the owner, independent of phase names.
 - [ ] Complete template definition, body-font control and representative theme preview.
 - [ ] Mobile/accessibility and end-to-end live workflow verification.
 
@@ -48,3 +48,9 @@ Supabase still reports leaked-password protection disabled; no new database secu
 ## Findings and authorship validation
 
 40 application tests, Nuxt typecheck and Pages static generation passed. An isolated demo browser verified multiple observations, ledger detour/draft restoration, editing/removal, reload persistence, author display and mobile width. Six rollback-only live database checks verified former-author visibility for private readers, outsider/anonymous isolation, public author visibility and unchanged authorship after editing. Existing public-member profile visibility is preserved; unrelated profiles remain hidden.
+
+## Project completion validation
+
+The additive is_completed flag defaults to false. A one-time migration preserves existing Done/Complete/Completed dashboard classification; phase names no longer control completion afterwards. Older local demos receive the same one-time upgrade. Owners change completion in Edit project; completed projects remain readable and editable.
+
+40 application tests, Nuxt typecheck and Pages generation passed. The isolated browser flow verified completion with a custom phase, Vault grouping, reopening while the phase is named Done, reload persistence and retained logs. Seven rollback-only live checks verified defaults, owner updates, contributor/reader/outsider denial and public read access.

@@ -203,6 +203,7 @@ onMounted(loadProject)
       </div>
 
       <dl class="project-work-order__stats">
+        <div><dt>Build status</dt><dd>{{ project.is_completed ? 'Completed' : 'In progress' }}</dd></div>
         <div><dt>Current stage</dt><dd>{{ currentPhase?.name || 'Not set' }}</dd></div>
         <div><dt>Sessions logged</dt><dd>{{ logs.length }}</dd></div>
         <div><dt>Workshop time</dt><dd>{{ formatDuration(totalMinutes) }}</dd></div>
