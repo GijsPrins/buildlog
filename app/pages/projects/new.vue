@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import type { ThemeConfig } from '~/types/domain'
 import type { ProjectEditorPhase } from '~/utils/projectEditor'
-import { defaultProjectTheme } from '~/utils/projectEditor'
+import { createProjectTemplateSnapshot, projectTemplates } from '~/utils/projectTemplates'
+import { validateTheme } from '~/utils/themes'
 
 definePageMeta({ middleware: 'auth' })
 
@@ -15,16 +16,27 @@ const objectStory = ref('')
 const heroFile = ref<File | null>(null)
 const heroPreview = ref('')
 const isPublic = ref(false)
-const itemsEnabled = ref(false)
-const costsEnabled = ref(false)
+const templateId = ref<string | null>('bicycle-restoration')
+const templateDefaults = createProjectTemplateSnapshot(templateId.value)
+const itemsEnabled = ref(templateDefaults.itemsEnabled)
+const costsEnabled = ref(templateDefaults.costsEnabled)
 const currencyCode = ref('EUR')
-const theme = ref<ThemeConfig>(defaultProjectTheme())
-const phases = ref<ProjectEditorPhase[]>(['Purchase', 'Inspection', 'Disassembly', 'Cleaning', 'Overhaul', 'Assembly', 'Tuning', 'Done'].map((phaseName, index) => ({ key: `new-${index}`, id: null, name: phaseName, archived: false })))
+const theme = ref<ThemeConfig>(templateDefaults.theme)
+const phases = ref<ProjectEditorPhase[]>(templateDefaults.phases.map((phaseName, index) => ({ key: `new-${index}`, id: null, name: phaseName, archived: false })))
 const currentPhaseKey = ref<string | null>(phases.value[0]?.key || null)
 const busy = ref(false)
 const errorMessage = ref('')
 const demoMode = useDemoMode()
 const demo = useDemoStore()
+
+function applyTemplate() {
+  const nextId = templateId.value || null
+  templateId.value = nextId
+  const snapshot = createProjectTemplateSnapshot(nextId)
+  theme.value = snapshot.theme; itemsEnabled.value = snapshot.itemsEnabled; costsEnabled.value = snapshot.costsEnabled
+  phases.value = snapshot.phases.map((name, index) => ({ key: `new-${index}`, id: null, name, archived: false }))
+  currentPhaseKey.value = phases.value[0]?.key || null
+}
 
 function selectHero(event: Event) {
   const input = event.target as HTMLInputElement
@@ -54,6 +66,8 @@ watch(name, (value, previousValue) => {
 })
 
 async function submit() {
+  const invalidTheme = validateTheme(theme.value)
+  if (invalidTheme) { errorMessage.value = invalidTheme; return }
   const usablePhases = phases.value.filter(phase => !phase.archived && phase.name.trim())
   if (!usablePhases.length) {
     errorMessage.value = 'Keep at least one active project phase.'
@@ -234,6 +248,13 @@ async function submit() {
 </script>
 
 <template>
+  <section class="form-card" aria-label="Project starting point">
+    <label class="field"><span>Starting point</span><select v-model="templateId" :disabled="busy"><option value="">Start without a template</option><option v-for="template in projectTemplates" :key="template.id" :value="template.id">{{ template.name }}</option></select></label>
+    <button class="button button--ghost" type="button" :disabled="busy" @click="applyTemplate">Apply starting point</button>
+    <p class="muted">Applying replaces the phases, palette and ledger defaults. Your name, story and photo stay.</p>
+    <p>{{ projectTemplates.find(template => template.id === templateId)?.description || 'Choose your own phases, facts and visual identity for any kind of build.' }}</p>
+    <p class="muted">These are starting defaults. Everything belongs to your project once it is created. Optional specification suggestions are available in its dossier.</p>
+  </section>
   <ProjectRecordForm
     v-model:name="name" v-model:project-slug="slug" v-model:subtitle="subtitle" v-model:description="description"
     v-model:started-story="startedStory" v-model:motivation-story="motivationStory" v-model:object-story="objectStory"

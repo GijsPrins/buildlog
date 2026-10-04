@@ -96,7 +96,7 @@ onMounted(async () => { await load(); reset() })
 </script>
 <template>
   <p v-if="loading" role="status">Opening the project dossier…</p>
-  <div v-else class="specifications">
+  <div v-else class="specifications" :style="projectThemeStyle(project?.theme_config)">
     <NuxtLink :to="`/projects/${slug}`">← {{ project?.name || 'Back to project' }}</NuxtLink>
     <h1>Project specifications</h1>
     <p>Measurements, identification and facts worth keeping with the build.</p>

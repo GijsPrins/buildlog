@@ -2,6 +2,7 @@
 import type { Project, ProjectImage, ProjectMembership, ProjectPhase, ThemeConfig } from '~/types/domain'
 import type { ProjectEditorPhase } from '~/utils/projectEditor'
 import { copyTheme } from '~/utils/projectEditor'
+import { validateTheme } from '~/utils/themes'
 
 definePageMeta({ middleware: 'auth' })
 
@@ -94,6 +95,8 @@ async function save() {
   if (!project.value || !theme.value || !isOwner.value) return
   busy.value = true; errorMessage.value = ''; successMessage.value = ''
   try {
+    const invalidTheme = validateTheme(theme.value)
+    if (invalidTheme) throw new Error(invalidTheme)
     const cleanSlug = slugify(projectSlug.value)
     const usablePhases = phases.value.filter(phase => phase.name.trim())
     if (!usablePhases.some(phase => !phase.archived)) throw new Error('Keep at least one active project phase.')

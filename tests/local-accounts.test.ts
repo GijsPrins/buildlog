@@ -17,6 +17,27 @@ beforeEach(() => {
 })
 
 describe('local workshop accounts', () => {
+  it('copies project themes independently and keeps theme editing owner-only', async () => {
+    const accounts = useLocalAccounts(); await accounts.initialize()
+    const demo = useDemoStore(); demo.initialize()
+    const first = demo.listProjects()[0]!
+    const second = demo.listProjects()[1]!
+    const originalSecond = JSON.stringify(second.theme_config)
+    const config = JSON.parse(JSON.stringify(first.theme_config))
+    config.typography.body = 'serif'
+    demo.updateProjectTheme(first.id, config)
+    config.colors.primary = '#ffffff'
+    expect(demo.getProject(first.slug)!.project.theme_config.colors.primary).not.toBe('#ffffff')
+    expect(demo.getProject(first.slug)!.project.theme_config.typography.body).toBe('serif')
+    expect(JSON.stringify(second.theme_config)).toBe(originalSecond)
+    await accounts.register('Theme reader', 'theme-reader@example.test', 'Workshop2026!')
+    const readerId = accounts.current.value!.id
+    await accounts.signIn('builder@buildlog.local', 'Workshop2026!')
+    accounts.addMember(first.id, 'theme-reader@example.test', 'contributor')
+    await accounts.signIn('theme-reader@example.test', 'Workshop2026!')
+    expect(accounts.current.value!.id).toBe(readerId)
+    expect(() => demo.updateProjectTheme(first.id, config)).toThrow('permission')
+  })
   it('transfers ownership to a member and revokes the previous owner administration rights', async () => {
     const accounts = useLocalAccounts(); await accounts.initialize()
     const demo = useDemoStore(); demo.initialize()

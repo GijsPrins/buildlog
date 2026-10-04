@@ -30,6 +30,7 @@ watch(quickProjects, current => {
 
 function projectStyle(project: ProjectSummary) {
   return {
+    ...projectThemeStyle(project.theme_config),
     '--stand-primary': project.theme_config.colors.primary,
     '--stand-secondary': project.theme_config.colors.secondary,
     '--stand-accent': project.theme_config.colors.accent,
@@ -167,7 +168,7 @@ watch(() => user.value?.id, () => loadProjects())
           v-for="project in activeProjects"
           :key="project.id"
           class="stand-project"
-          :class="`theme--${project.theme_config.preset}`"
+          :class="`project-texture--${project.theme_config.decoration.texture}`"
           :style="projectStyle(project)"
           :to="`/projects/${project.slug}`"
         >

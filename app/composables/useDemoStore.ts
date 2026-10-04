@@ -541,6 +541,15 @@ export function useDemoStore() {
     return project
   }
 
+  function updateProjectTheme(projectId: string, config: ThemeConfig) {
+    accounts.requireRole(projectId, true)
+    const project = database.value.projects.find(entry => entry.id === projectId)
+    if (!project) throw new Error('Project not found.')
+    project.theme_config = JSON.parse(JSON.stringify(config)) as ThemeConfig
+    project.updated_at = new Date().toISOString()
+    persist()
+  }
+
   function addLog(input: DemoLogInput) {
     accounts.requireRole(input.projectId)
     const now = new Date().toISOString()
@@ -651,5 +660,5 @@ export function useDemoStore() {
     persist()
   }
 
-  return { deleteLog, listSpecifications, saveSpecification, deleteSpecification, ownedItems, linkOwnedItem, editLedgerEntry, editOwnedItem, deleteLocalAccount, initialize, listProjects, getProject, getLog, listProjectItems, listProjectLogUsage, createProject, updateProject, setItemAllocation, addProjectItem, addLog, updateLog, reset }
+  return { deleteLog, listSpecifications, saveSpecification, deleteSpecification, ownedItems, linkOwnedItem, editLedgerEntry, editOwnedItem, deleteLocalAccount, initialize, listProjects, getProject, getLog, listProjectItems, listProjectLogUsage, createProject, updateProject, updateProjectTheme, setItemAllocation, addProjectItem, addLog, updateLog, reset }
 }

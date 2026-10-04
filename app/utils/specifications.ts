@@ -1,17 +1,8 @@
 import type { ProjectSpec } from '~/types/domain'
+import { bicycleRestorationTemplate } from './projectTemplates'
 
 // Optional template suggestions; saved specifications are owned by the project.
-export const bicycleSpecSuggestions = [
-  { section: 'Frame', label: 'Manufacturer' },
-  { section: 'Frame', label: 'Model' },
-  { section: 'Frame', label: 'Material' },
-  { section: 'Frame', label: 'Serial number' },
-  { section: 'Frame', label: 'Size' },
-  { section: 'Headset', label: 'Manufacturer' },
-  { section: 'Headset', label: 'Bearing size' },
-  { section: 'Wheels', label: 'Rim size' },
-  { section: 'Drivetrain', label: 'Gearing' }
-]
+export const bicycleSpecSuggestions = bicycleRestorationTemplate.specifications
 
 export function normalizeSpecification(input: Omit<ProjectSpec, 'id' | 'project_id'>) {
   const result = { ...input, section: input.section.trim(), label: input.label.trim(), value: input.value.trim(), notes: input.notes?.trim() || null, source: input.source?.trim() || null }

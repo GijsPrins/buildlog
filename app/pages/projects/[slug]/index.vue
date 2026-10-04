@@ -61,20 +61,7 @@ const storyChapters = computed(() => project.value ? [
   }
 ] : [])
 const hasStory = computed(() => storyChapters.value.some(chapter => chapter.text))
-const projectStyle = computed(() => ({
-  '--project-background': project.value?.theme_config?.colors?.background || '#f3f0e9',
-  '--project-radius': { none: '0px', small: '4px', medium: '14px' }[project.value?.theme_config?.shape?.radius || 'small'],
-  '--project-shadow': project.value?.theme_config?.shape?.shadow === 'none' ? 'none' : '8px 8px 0 #00000014',
-  '--project-primary': project.value?.theme_config?.colors?.primary || '#123f36',
-  '--project-secondary': project.value?.theme_config?.colors?.secondary || '#596b8c',
-  '--project-accent': project.value?.theme_config?.colors?.accent || '#e27143',
-  '--project-surface': project.value?.theme_config?.colors?.surface || '#fffdf8',
-  '--project-border': project.value?.theme_config?.colors?.border || '#d8d6ce',
-  '--project-text': project.value?.theme_config?.colors?.text || '#18211e',
-  '--project-muted': project.value?.theme_config?.colors?.muted || '#63706b',
-  '--project-heading': project.value?.theme_config?.typography?.heading === 'serif' ? 'Georgia, serif' : 'Inter, sans-serif',
-  '--project-on-primary': '#ffffff'
-}))
+const projectStyle = computed(() => projectThemeStyle(project.value?.theme_config))
 
 async function loadProject() {
   if (demoMode.value) {
@@ -174,7 +161,7 @@ onMounted(loadProject)
     <p>{{ errorMessage }}</p>
     <NuxtLink class="button" to="/">Back to projects</NuxtLink>
   </div>
-  <div v-else-if="project" class="project-workshop" :class="[`theme--${project.theme_config.preset}`, `project-texture--${project.theme_config.decoration?.texture || 'none'}`, `project-frame--${project.theme_config.decoration?.imageFrame || 'none'}`]" :style="projectStyle">
+  <div v-else-if="project" class="project-workshop" :class="[`project-texture--${project.theme_config.decoration?.texture || 'none'}`, `project-frame--${project.theme_config.decoration?.imageFrame || 'none'}`]" :style="projectStyle">
     <section class="project-work-order">
       <div class="project-work-order__bar">
         <NuxtLink to="/">← Workshop board</NuxtLink>
@@ -189,6 +176,7 @@ onMounted(loadProject)
           <div class="project-work-order__actions">
             <NuxtLink v-if="canEdit" class="button" :to="`/projects/${project.slug}/logs/new`">+ Quick workshop log</NuxtLink>
             <NuxtLink class="button button--ghost" :to="`/projects/${project.slug}/specs`">Specifications</NuxtLink>
+            <NuxtLink v-if="isOwner" class="button button--ghost" :to="`/projects/${project.slug}/theme`">Theme Workshop</NuxtLink>
             <NuxtLink v-if="isOwner" class="button button--ghost project-work-order__edit" :to="`/projects/${project.slug}/edit`">Edit project</NuxtLink>
             <a class="project-work-order__jump" href="#build-log">View workshop sessions ↓</a>
           </div>

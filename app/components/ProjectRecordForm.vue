@@ -48,19 +48,7 @@ async function savePalette() {
 onMounted(async () => { try { await themeLibrary.load() } catch (cause) { themeLibraryError.value = cause instanceof Error ? cause.message : 'Could not load saved themes.' } })
 
 const activePhases = computed(() => phases.value.filter(phase => !phase.archived))
-const projectStyle = computed(() => ({
-  '--project-background': theme.value.colors.background,
-  '--project-heading': theme.value.typography.heading === 'serif' ? 'Georgia, serif' : 'Arial, sans-serif',
-  '--project-radius': { none: '0px', small: '4px', medium: '14px' }[theme.value.shape.radius],
-  '--project-shadow': theme.value.shape.shadow === 'subtle' ? '8px 8px 0 #00000014' : 'none',
-  '--project-primary': theme.value.colors.primary,
-  '--project-secondary': theme.value.colors.secondary,
-  '--project-accent': theme.value.colors.accent,
-  '--project-surface': theme.value.colors.surface,
-  '--project-border': theme.value.colors.border,
-  '--project-text': theme.value.colors.text,
-  '--project-muted': theme.value.colors.muted
-}))
+const projectStyle = computed(() => projectThemeStyle(theme.value))
 
 function applyPreset(preset: ThemeConfig) { theme.value = copyTheme(preset) }
 function addPhase() { phases.value = [...phases.value, { key: `new-${crypto.randomUUID()}`, id: null, name: 'New phase', archived: false }] }
@@ -123,6 +111,7 @@ function archivePhase(phase: ProjectEditorPhase) {
       <div v-if="themeLibrary.themes.value.length" class="theme-editor"><button v-for="entry in themeLibrary.themes.value" :key="entry.id" type="button" :class="{ current: theme.preset === entry.config.preset }" :style="{ '--swatch-a': entry.config.colors.primary, '--swatch-b': entry.config.colors.accent, '--swatch-c': entry.config.colors.background }" @click="applyPreset(entry.config)"><i /><strong>{{ entry.name }}</strong><span>Your library</span></button></div>
       <div class="theme-editor"><button v-for="preset in projectThemePresets" :key="preset.name" type="button" :class="{ current: theme.preset === preset.name }" :style="{ '--swatch-a': preset.config.colors.primary, '--swatch-b': preset.config.colors.accent, '--swatch-c': preset.config.colors.background }" @click="applyPreset(preset.config)"><i /><strong>{{ preset.label }}</strong><span>{{ preset.name }}</span></button></div>
       <ThemeControls v-model="theme" />
+      <ThemePreview :theme="theme" :name="name" :photo-src="heroPreview || currentHeroUrl" />
       <div class="form-actions"><label class="field"><span>Keep this palette for another build</span><input v-model="themeLibraryName" maxlength="80" placeholder="Name this palette" :disabled="themeLibraryBusy"></label><button class="button button--ghost" type="button" :disabled="themeLibraryBusy || !themeLibraryName.trim()" @click="savePalette">{{ themeLibraryBusy ? 'Saving palette…' : 'Save to theme library' }}</button></div>
       <p v-if="themeLibraryMessage" role="status">{{ themeLibraryMessage }}</p>
     </section>

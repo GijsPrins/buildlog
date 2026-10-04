@@ -45,15 +45,7 @@ const roleOptions: Array<{ value: ProjectItemRole; label: string }> = [
   { value: 'tool', label: 'Tool' }, { value: 'external_service', label: 'External service' }
 ]
 const statusOptions: ProjectItemStatus[] = ['planned', 'ordered', 'available', 'installed', 'used', 'removed']
-const projectStyle = computed(() => ({
-  '--project-primary': project.value?.theme_config?.colors?.primary || '#123f36',
-  '--project-secondary': project.value?.theme_config?.colors?.secondary || '#596b8c',
-  '--project-accent': project.value?.theme_config?.colors?.accent || '#e27143',
-  '--project-surface': project.value?.theme_config?.colors?.surface || '#fffdf8',
-  '--project-border': project.value?.theme_config?.colors?.border || '#d8d6ce',
-  '--project-text': project.value?.theme_config?.colors?.text || '#18211e',
-  '--project-muted': project.value?.theme_config?.colors?.muted || '#63706b'
-}))
+const projectStyle = computed(() => projectThemeStyle(project.value?.theme_config))
 
 async function loadMaterials() {
   errorMessage.value = ''

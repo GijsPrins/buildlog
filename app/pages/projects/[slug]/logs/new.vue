@@ -38,16 +38,7 @@ const durationLabel = computed(() => {
   const minutes = Math.max(0, (durationHours.value ?? 0) * 60 + (durationMinutes.value ?? 0))
   return minutes ? formatDuration(minutes) : 'Not timed'
 })
-const projectStyle = computed(() => ({
-  '--project-primary': project.value?.theme_config?.colors?.primary || '#123f36',
-  '--project-secondary': project.value?.theme_config?.colors?.secondary || '#596b8c',
-  '--project-accent': project.value?.theme_config?.colors?.accent || '#e27143',
-  '--project-surface': project.value?.theme_config?.colors?.surface || '#fffdf8',
-  '--project-border': project.value?.theme_config?.colors?.border || '#d8d6ce',
-  '--project-text': project.value?.theme_config?.colors?.text || '#18211e',
-  '--project-muted': project.value?.theme_config?.colors?.muted || '#63706b',
-  '--project-heading': project.value?.theme_config?.typography?.heading === 'serif' ? 'Georgia, serif' : 'Inter, sans-serif'
-}))
+const projectStyle = computed(() => projectThemeStyle(project.value?.theme_config))
 
 async function loadProject() {
   if (demoMode.value) {

@@ -9,8 +9,9 @@ defineProps<{
 <template>
   <NuxtLink
     class="project-card"
-    :class="`theme--${project.theme_config.preset}`"
+    :class="`project-texture--${project.theme_config.decoration.texture}`"
     :style="{
+      ...projectThemeStyle(project.theme_config),
       '--project-accent': project.theme_config.colors.primary,
       '--project-card-surface': project.theme_config.colors.surface,
       '--project-card-ink': project.theme_config.colors.text,
