@@ -300,7 +300,8 @@ img { display: block; max-width: 100%; }
 .session-form::before { left: -3px; }
 .session-form::after { right: -3px; }
 .session-builder .button { border-color: var(--project-primary); border-radius: 0.15rem; background: var(--project-primary); }
-.session-builder .button--ghost { border-color: transparent; background: transparent; color: white; }
+.session-builder .button--ghost { border-color: transparent; background: transparent; color: var(--project-text); }
+.session-builder .builder-submit .button--ghost { color: white; }
 .session-form__bar { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); font-family: var(--work-order-type); }
 .session-form__bar strong { padding: 0.25rem 0.5rem; border: 1px solid rgb(255 255 255 / 38%); color: #e5c58d; font-size: 0.62rem; letter-spacing: 0.16em; transform: rotate(-1deg); }
 .session-form__bar > span { justify-self: end; }
@@ -806,3 +807,17 @@ img { display: block; max-width: 100%; }
 .project-card__visual::after { position: absolute; inset: auto 0 0; height: 6px; content: ""; background: linear-gradient(90deg, var(--project-secondary), var(--project-accent), var(--project-primary)); }
 .project-texture--grid .stand-project__body, .project-texture--grid .project-card__body { background-image: linear-gradient(var(--project-border) 1px, transparent 1px), linear-gradient(90deg, var(--project-border) 1px, transparent 1px); background-size: 28px 28px; }
 .project-texture--paper .stand-project__body, .project-texture--paper .project-card__body { background-image: repeating-linear-gradient(11deg,#00000004 0 1px,transparent 1px 5px); }
+
+/* Keep keyboard focus visible even on the borderless workshop forms. */
+:root :is(a, button, input, textarea, select, summary):focus-visible {
+  outline: 3px solid #b44416;
+  outline-offset: 3px;
+}
+.project-editor__hero:focus-within,
+.session-photo-board:has(#photos:focus-visible) .session-photo-add,
+.log-photo-section:has(#more-photos:focus-visible) label[for="more-photos"] {
+  outline: 3px solid #b44416;
+  outline-offset: -4px;
+}
+.skip-link { position: fixed; top: .75rem; left: .75rem; z-index: 100; padding: .75rem 1rem; transform: translateY(-200%); background: #fffdf8; color: #18211e; }
+.skip-link:focus { transform: none; }

@@ -43,11 +43,11 @@ async function run(action: string, targetId?: string) {
     <div class="form-card">
       <div v-for="member in members" :key="member.userId" class="member-row">
         <div><strong>{{ member.name }}</strong><small>{{ member.email }} · {{ member.role }}</small></div>
-        <button v-if="member.role !== 'owner'" type="button" class="button button--ghost button--small" :disabled="busy" @click="run('remove', member.userId)">Remove access</button>
+        <button v-if="member.role !== 'owner'" type="button" class="button button--ghost button--small" :disabled="busy" :aria-label="`Remove access for ${member.name}`" @click="run('remove', member.userId)">Remove access</button>
       </div>
       <div v-for="invitation in invitations" :key="invitation.id" class="member-row">
         <div><strong>{{ invitation.email }}</strong><small>{{ invitation.role }} · {{ Date.parse(invitation.expiresAt) > Date.now() ? 'Pending' : 'Expired' }} · expires {{ new Date(invitation.expiresAt).toLocaleDateString() }}</small></div>
-        <button type="button" class="button button--ghost button--small" :disabled="busy" @click="run('cancel', invitation.id)">Cancel invitation</button>
+        <button type="button" class="button button--ghost button--small" :disabled="busy" :aria-label="`Cancel invitation for ${invitation.email}`" @click="run('cancel', invitation.id)">Cancel invitation</button>
       </div>
       <div class="form-grid"><label class="field"><span>Email address</span><input v-model="email" type="email" placeholder="builder@example.com"></label><label class="field"><span>Access</span><select v-model="role"><option value="contributor">Contributor</option><option value="reader">Reader</option></select></label></div>
       <p class="muted">{{ demoMode ? 'Local invitations stay in this browser; no email is sent.' : 'Verified accounts are added immediately. New addresses receive access after signing up and verifying their email within seven days. Share the link below; invitation emails are not sent automatically.' }}</p>

@@ -6,9 +6,9 @@ Updated 4 October 2026. Social features remain outside this work.
 
 Repository: `GijsPrins/buildlog`, branch `main`, Nuxt 4 + Supabase, deployed by Pages on push. Live project: `wymnzbcnbvixnspykvlu`. Public configuration is in GitHub Actions Variables. Originals stay in private Storage; the browser uses signed URLs and RLS.
 
-Completed through the Purchases delivery (following `8858f3a`): auth/recovery, additive photos with captions/roles, in-tab log drafts, independent quantities/usage costs, project finances, item ownership/edit/reuse, specifications, ownership transfer, log deletion preserving originals, multiple findings and log authorship, explicit completion/reopening, template snapshots, project Theme Workshop and a deduplicated workshop purchase overview.
+Completed through `bf0039b`: auth/recovery, additive photos with captions/roles, in-tab log drafts, independent quantities/usage costs, project finances, item ownership/edit/reuse, specifications, ownership transfer, log deletion preserving originals, multiple findings and log authorship, explicit completion/reopening, template snapshots, project Theme Workshop and a deduplicated workshop purchase overview.
 
-Next delivery: mobile/accessibility and the end-to-end live workflow audit. Purchases now supports independent owned items, shared items from enabled member ledgers, one purchase per item, per-currency actual/planned totals, tool subsets and full purchase/estimate editing. Existing RLS stays unchanged. Social features remain outside MVP.
+Current delivery completed: mobile/accessibility and the end-to-end live workflow audit. All listed MVP deliveries are checked; social features are the next separate product scope. Purchases now supports independent owned items, shared items from enabled member ledgers, one purchase per item, per-currency actual/planned totals, tool subsets and full purchase/estimate editing. Existing RLS stays unchanged. Social features remain outside MVP.
 
 Validation: 52 tests, typecheck, static Pages generation, isolated browser against the static build, rollback-only live DB permission checks. Purchases delivery passed 9 live checks. Dev HMR can become stale when generated imports change; use the static build for browser verification. Push verified changes to main as already authorized. Never use real user data in destructive tests.
 
@@ -39,7 +39,7 @@ The live migration is additive. Database verification uses temporary fixture acc
 - [x] Multiple editable finding/decision pairs and visible log authorship, including former project members.
 - [x] Explicit project completion/reopening by the owner, independent of phase names.
 - [x] Bicycle Restoration template snapshot, optional template-free start, body-font control, project Theme Workshop and representative live preview.
-- [ ] Mobile/accessibility and end-to-end live workflow verification.
+- [x] Mobile/accessibility and end-to-end live workflow verification.
 
 Other follow-up work: persistent drafts beyond tab navigation, storage backup/export, monitoring and privacy/retention documentation.
 
@@ -72,3 +72,15 @@ Authenticated /purchases includes owned items (including unlinked purchases) and
 Totals deduplicate item IDs, separate currencies without conversions, suppress estimates once an actual price exists (including zero) and identify tool expenditure as a subset of actual purchases. Missing money is reported. Project allocations and usage costs are separate. Exact-count pagination reads all records, handles lower server caps, and fails without showing partial totals; account changes clear previous results.
 
 52 application tests, Nuxt typecheck, static Pages generation, and an isolated browser passed. Browser coverage: per-currency totals, free purchases, estimates, a shared tool on two projects, independent creation, search, linked projects, existing ledger-editor regression, persistence, mobile width and account isolation. Nine rollback-only live checks covered deduplication, unlinked ownership/create/edit, private inventory isolation, membership scope and shared-item editing permissions. No schema migration was needed.
+
+## Mobile/accessibility and live workflow audit
+
+Fixed project-story label associations, phase-specific reorder/archive names, item quantity/note/status names in log corrections, member-specific removal/invitation names, form error/status announcements, visible keyboard focus on borderless inputs and photo pickers, and a skip-to-content link. Finding/decision action buttons now use project text colour on the light session surface; the dark submit footer retains white text.
+
+52 tests, Nuxt typecheck and Pages generation passed. Isolated static-browser checks covered field labels, no horizontal overflow at 320/390/768 pixels, keyboard focus, skip-link activation and upload focus across project creation, log creation, materials, specifications, themes, purchases and account screens. Visual inspection of the live mobile log found and corrected white finding-action text on the light background. These are targeted accessibility checks, not a WCAG certification or physical-device test.
+
+A separate live Supabase browser/API test used three temporary confirmed fixture accounts. It verified real login; private project creation with original cover upload; a log draft surviving the parts-ledger detour; additive photographs with independent captions/before/after roles; SHA-256 equality of downloaded originals; 75-minute time recording; independent quantity/usage cost persistence; log corrections; specification creation; member assignment; Contributor editing controls and Reader read-only controls; denied owner-only settings changes; anonymous private isolation/public visibility; and completion/reopening.
+
+Fixtures were created directly for testing, so registration email delivery and recovery email delivery were not exercised here. Earlier auth/recovery implementation remains in place. Previous deliveries separately verified themes, financial calculations, ownership transfer and log deletion through isolated browsers and rollback database checks.
+
+The deployed delete-account Edge Function removed all three fixture accounts and their project/photo content after each run, including failed test-selector attempts. Final database verification found zero fixture accounts, projects or items and zero orphan original objects. No production user content was modified. No schema migration was needed.

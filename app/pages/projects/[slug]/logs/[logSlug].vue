@@ -231,7 +231,7 @@ watch(() => route.query.edit, value => { editing.value = value === '1'; if (edit
         <label class="field field--full"><span>Workshop notes</span><textarea v-model="content" /></label>
         <div class="field field--full"><h2>Findings &amp; decisions</h2><FindingDecisionEditor v-model="observations" :disabled="busy" /></div>
       </div>
-      <section v-if="project.items_enabled" class="log-edit__parts"><h2>Parts used</h2><article v-for="entry in projectItems" :key="entry.id" :class="{ 'is-selected': selectedItems[entry.id] }"><label><input v-model="selectedItems[entry.id]" type="checkbox"><strong>{{ entry.item.name }}</strong><small>{{ entry.status || 'unmarked' }}</small></label><div v-if="selectedItems[entry.id]"><input v-model.number="itemAmounts[entry.id]" min="0" step="0.01" type="number" placeholder="Qty"><label v-if="project.cost_tracking_enabled">Usage cost ({{ project.currency_code }})<input v-model.number="itemCosts[entry.id]" min="0" step="0.01" type="number" placeholder="Not recorded"></label><input v-model="itemNotes[entry.id]" placeholder="Usage note"><select v-model="itemStatuses[entry.id]"><option value="">Keep status</option><option value="installed">Installed</option><option value="used">Used</option><option value="removed">Removed</option></select></div></article></section>
+      <section v-if="project.items_enabled" class="log-edit__parts"><h2>Parts used</h2><article v-for="entry in projectItems" :key="entry.id" :class="{ 'is-selected': selectedItems[entry.id] }"><label><input v-model="selectedItems[entry.id]" type="checkbox"><strong>{{ entry.item.name }}</strong><small>{{ entry.status || 'unmarked' }}</small></label><div v-if="selectedItems[entry.id]"><input v-model.number="itemAmounts[entry.id]" min="0" step="0.01" type="number" :aria-label="`Quantity for ${entry.item.name}`" placeholder="Qty"><label v-if="project.cost_tracking_enabled">Usage cost ({{ project.currency_code }})<input v-model.number="itemCosts[entry.id]" min="0" step="0.01" type="number" placeholder="Not recorded"></label><input v-model="itemNotes[entry.id]" :aria-label="`Usage note for ${entry.item.name}`" placeholder="Usage note"><select v-model="itemStatuses[entry.id]" :aria-label="`Status after this session for ${entry.item.name}`"><option value="">Keep status</option><option value="installed">Installed</option><option value="used">Used</option><option value="removed">Removed</option></select></div></article></section>
       <section class="log-photo-section">
         <h2>Workshop photos</h2>
         <div class="log-photo-list">
@@ -241,7 +241,7 @@ watch(() => route.query.edit, value => { editing.value = value === '1'; if (edit
         <input id="more-photos" class="sr-only" type="file" accept="image/*" multiple :disabled="busy" @change="selectFiles">
         <label class="session-photo-add" for="more-photos">+ Add more photos</label>
       </section>
-      <p v-if="errorMessage" class="form-error">{{ errorMessage }}</p>
+      <p v-if="errorMessage" class="form-error" role="alert">{{ errorMessage }}</p>
       <footer class="builder-submit"><div><p class="eyebrow">Archive correction</p><strong>The original work date remains part of the record.</strong></div><div><NuxtLink class="button button--ghost" :to="`/projects/${slug}/logs/${logSlug}`">Cancel</NuxtLink><button class="button" type="submit" :disabled="busy">{{ busy ? 'Updating work order…' : 'Save corrected work order →' }}</button></div></footer>
     </form>
     <section v-if="canEdit" class="form-card">

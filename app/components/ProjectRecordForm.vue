@@ -15,6 +15,7 @@ const props = defineProps<{
   successMessage?: string
 }>()
 const emit = defineEmits<{ submit: []; heroSelected: [event: Event] }>()
+const fieldId = useId()
 
 const name = defineModel<string>('name', { required: true })
 const projectSlug = defineModel<string>('projectSlug', { required: true })
@@ -92,13 +93,13 @@ function archivePhase(phase: ProjectEditorPhase) {
 
     <section class="project-editor__section">
       <header class="builder-section-heading"><span>01</span><div><p class="eyebrow">Project anchor</p><h2>The story</h2></div><p>Keep the reason for the build close to the work itself.</p></header>
-      <div class="builder-story-grid"><article><span>01</span><label>How it started</label><textarea v-model="startedStory" placeholder="Where did you find it? What made you stop and look?" /></article><article><span>02</span><label>Why this build</label><textarea v-model="motivationStory" placeholder="What do you want to preserve, change or prove?" /></article><article><span>03</span><label>The object before us</label><textarea v-model="objectStory" placeholder="Known history, clues, scars — and what remains unknown." /></article></div>
+      <div class="builder-story-grid"><article><span>01</span><label :for="`${fieldId}-started`">How it started</label><textarea :id="`${fieldId}-started`" v-model="startedStory" placeholder="Where did you find it? What made you stop and look?" /></article><article><span>02</span><label :for="`${fieldId}-motivation`">Why this build</label><textarea :id="`${fieldId}-motivation`" v-model="motivationStory" placeholder="What do you want to preserve, change or prove?" /></article><article><span>03</span><label :for="`${fieldId}-object`">The object before us</label><textarea :id="`${fieldId}-object`" v-model="objectStory" placeholder="Known history, clues, scars — and what remains unknown." /></article></div>
     </section>
 
     <section class="project-editor__section">
       <header class="builder-section-heading"><span>02</span><div><p class="eyebrow">Route across the bench</p><h2>Build phases</h2></div><p>Shape the route now; it can keep changing as the work develops.</p></header>
       <div class="phase-editor">
-        <article v-for="(phase, index) in phases" :key="phase.key" :class="{ 'is-archived': phase.archived, 'is-current': currentPhaseKey === phase.key }"><strong>{{ String(index + 1).padStart(2, '0') }}</strong><input v-model="phase.name" required aria-label="Phase name"><div><button type="button" :disabled="index === 0" @click="movePhase(index, -1)">↑</button><button type="button" :disabled="index === phases.length - 1" @click="movePhase(index, 1)">↓</button><button type="button" @click="archivePhase(phase)">{{ phase.archived ? 'Restore' : 'Archive' }}</button></div></article>
+        <article v-for="(phase, index) in phases" :key="phase.key" :class="{ 'is-archived': phase.archived, 'is-current': currentPhaseKey === phase.key }"><strong>{{ String(index + 1).padStart(2, '0') }}</strong><input v-model="phase.name" required :aria-label="`Phase ${index + 1} name`"><div><button type="button" :disabled="index === 0" :aria-label="`Move ${phase.name} earlier`" @click="movePhase(index, -1)">↑</button><button type="button" :disabled="index === phases.length - 1" :aria-label="`Move ${phase.name} later`" @click="movePhase(index, 1)">↓</button><button type="button" :aria-label="`${phase.archived ? 'Restore' : 'Archive'} phase ${phase.name}`" @click="archivePhase(phase)">{{ phase.archived ? 'Restore' : 'Archive' }}</button></div></article>
         <button class="phase-editor__add" type="button" @click="addPhase">+ Add project phase</button>
         <label class="phase-editor__current"><span>Current stage on the work order</span><select v-model="currentPhaseKey"><option :value="null">Not set</option><option v-for="phase in activePhases" :key="phase.key" :value="phase.key">{{ phase.name }}</option></select></label>
       </div>
@@ -128,7 +129,7 @@ function archivePhase(phase: ProjectEditorPhase) {
       <div><article><span>Owner</span><strong>{{ mode === 'create' ? 'You will control the master project record' : 'You control the master project record' }}</strong><small>Contributors can add workshop logs; readers can follow the build.</small></article><aside><strong>Add people after creating your project</strong><p>Save the project, then open Edit project to add contributors and readers to your workshop.</p></aside></div>
     </section>
 
-    <p v-if="errorMessage" class="form-error">{{ errorMessage }}</p><p v-if="successMessage" class="form-success">{{ successMessage }}</p>
+    <p v-if="errorMessage" class="form-error" role="alert">{{ errorMessage }}</p><p v-if="successMessage" class="form-success" role="status">{{ successMessage }}</p>
     <footer class="builder-submit"><div><p class="eyebrow">{{ mode === 'create' ? 'New record' : 'Master record' }}</p><strong>{{ activePhases.length }} active phases · {{ itemsEnabled ? 'parts ledger on' : 'simple buildlog' }}</strong></div><div><NuxtLink class="button button--ghost" :to="backTo">Cancel</NuxtLink><button class="button" type="submit" :disabled="busy">{{ busy ? (mode === 'create' ? 'Putting it on the stand…' : 'Updating project…') : (mode === 'create' ? 'Put this build on the stand →' : 'Save project record →') }}</button></div></footer>
   </form>
 </template>

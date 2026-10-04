@@ -397,7 +397,7 @@ onMounted(async () => {
       <ul v-if="files.length && uploadProgress.length" class="upload-list session-upload-progress">
         <li v-for="(file, index) in files" :key="`${file.name}-${file.size}`"><span>{{ file.name }}</span><span>{{ uploadProgress[index] || `${Math.ceil(file.size / 1024)} KB` }}</span></li>
       </ul>
-      <p v-if="errorMessage" class="form-error">{{ errorMessage }}</p>
+      <p v-if="errorMessage" class="form-error" role="alert">{{ errorMessage }}</p>
       <footer class="builder-submit session-submit">
         <div><p class="eyebrow">Session ready</p><strong>{{ files.length ? `${files.length} photo${files.length === 1 ? '' : 's'} on the bench` : 'A log can start with words alone.' }}</strong></div>
         <div><NuxtLink class="button button--ghost" :to="`/projects/${slug}`" @click="discardDraft = true">Cancel</NuxtLink><button class="button" type="submit" :disabled="busy">{{ busy ? 'Saving workshop session…' : 'Add session to the build →' }}</button></div>
