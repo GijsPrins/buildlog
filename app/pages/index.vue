@@ -9,7 +9,7 @@ const loading = ref(configured)
 const errorMessage = ref('')
 const projects = ref<ProjectSummary[]>(demoMode.value ? demo.listProjects() : [])
 const quickProjectSlug = ref('')
-const { user, initialize } = useAuth()
+const { user, ready, initialize } = useAuth()
 
 const isCompleted = (project: ProjectSummary) => project.is_completed
 const activeProjects = computed(() => projects.value.filter(project => !isCompleted(project)))
@@ -130,15 +130,15 @@ watch(() => user.value?.id, () => loadProjects())
       <form v-if="canLog && quickProjects.length" class="quick-log" @submit.prevent="startQuickLog">
         <label for="quick-project">Quick capture</label>
         <div class="quick-log__controls">
-          <select id="quick-project" v-model="quickProjectSlug" aria-label="Project for quick workshop log">
+          <select id="quick-project" v-model="quickProjectSlug" aria-label="Project for the new session">
             <option v-for="project in quickProjects" :key="project.id" :value="project.slug">
               {{ project.name }}
             </option>
           </select>
-          <button class="button quick-log__button" type="submit">+ Quick Workshop Log</button>
+          <button class="button quick-log__button" type="submit">+ Log session</button>
         </div>
       </form>
-      <NuxtLink v-else-if="!canLog" class="button" to="/login">Sign in to log work</NuxtLink>
+      <NuxtLink v-else-if="ready && !canLog" class="button" to="/login">Sign in to log work</NuxtLink>
     </header>
 
     <section class="workshop-stats" aria-label="Workshop totals">
@@ -154,7 +154,7 @@ watch(() => user.value?.id, () => loadProjects())
       <div class="status-heading">
         <div>
           <span class="status-heading__number">01</span>
-          <div><p>Work in progress</p><h2 id="stand-heading">On the Stand</h2></div>
+          <div><p>Work in progress</p><h2 id="stand-heading">Active builds</h2></div>
         </div>
         <NuxtLink v-if="canLog" to="/projects/new">+ New build</NuxtLink>
       </div>

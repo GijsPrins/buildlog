@@ -235,7 +235,7 @@ onBeforeUnmount(() => { generation++ })
       <NuxtLink v-else class="approval-stamp" :to="signInTo" :aria-label="`Sign in to give this ${subject} a stamp of approval`">
         <svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="13" /><path d="m10 16 4 4 8-9" /></svg><span>Stamp of approval</span><strong>{{ approvalCount ?? '—' }}</strong>
       </NuxtLink>
-      <NuxtLink v-if="compact && discussionTo" class="workshop-social__discussion" :to="discussionTo">{{ commentCount ?? '—' }} {{ commentCount === 1 ? 'workshop note' : 'workshop notes' }} →</NuxtLink>
+      <NuxtLink v-if="compact && discussionTo" class="workshop-social__discussion" :to="discussionTo">{{ commentCount ?? '—' }} {{ commentCount === 1 ? 'note' : 'notes' }} →</NuxtLink>
       <span v-else class="muted">{{ commentCount ?? '—' }} {{ commentCount === 1 ? 'note' : 'notes' }}</span>
     </div>
     <p v-if="error" class="form-error" role="alert">{{ error }}</p>
@@ -246,7 +246,7 @@ onBeforeUnmount(() => { generation++ })
         <label :for="`${fieldId}-note`">Leave a note at the bench</label>
         <textarea :id="`${fieldId}-note`" v-model="draft" :maxlength="commentLimit" :disabled="busy" required placeholder="A thought, a question, a little encouragement…" />
         <small>{{ draft.length }} / {{ commentLimit }} · Visible to everyone who can view this {{ subject }}.</small>
-        <button class="button" type="submit" :disabled="busy || !draft.trim()">Leave workshop note</button>
+        <button class="button" type="submit" :disabled="busy || !draft.trim()">Leave note</button>
       </form>
       <p v-else><NuxtLink :to="signInTo">Sign in to join the bench →</NuxtLink></p>
       <p v-if="!loading && !error && !comments.length" class="muted">The bench is quiet. Leave the first note.</p>
@@ -268,7 +268,7 @@ onBeforeUnmount(() => { generation++ })
           </div>
         </WorkshopNote>
       </div>
-      <button v-if="hasMore" type="button" class="button button--ghost" :disabled="busy" @click="more">More workshop notes</button>
+      <button v-if="hasMore" type="button" class="button button--ghost" :disabled="busy" @click="more">More notes</button>
     </template>
   </section>
 </template>

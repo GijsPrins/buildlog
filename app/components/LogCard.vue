@@ -2,7 +2,7 @@
 import type { LogItemUsageDetail, ProjectImage, ProjectLog } from '~/types/domain'
 import type { WorkshopSummary } from '~/utils/workshopSocial'
 
-defineProps<{
+const props = defineProps<{
   log: ProjectLog
   authorName?: string
   phaseName?: string
@@ -11,6 +11,9 @@ defineProps<{
   projectSlug?: string
   social?: WorkshopSummary
 }>()
+const viewable = computed(() => (props.images ?? []).filter(image => image.signedUrl))
+const cover = computed(() => viewable.value[0])
+const morePhotos = computed(() => Math.max(0, viewable.value.length - 1))
 </script>
 
 <template>
@@ -27,35 +30,24 @@ defineProps<{
       </div>
     </header>
 
+    <!-- The card is a preview; full notes, findings and every photo live on the session page. -->
     <p v-if="log.summary" class="log-card__summary">{{ log.summary }}</p>
-    <p v-if="log.content" class="log-card__content">{{ log.content }}</p>
+    <p v-else-if="log.content" class="log-card__content">{{ log.content }}</p>
 
-    <div v-if="images?.length" class="photo-grid">
-      <figure v-for="image in images" :key="image.id" class="photo-frame">
-        <img v-if="image.signedUrl" :src="image.signedUrl" :alt="image.caption || log.title">
-        <figcaption v-if="image.caption || image.role !== 'gallery'">
-          {{ image.caption || image.role }}
-        </figcaption>
-      </figure>
-    </div>
+    <figure v-if="cover" class="photo-frame log-card__cover">
+      <img :src="cover.signedUrl" :alt="cover.caption || log.title">
+      <figcaption v-if="cover.caption || cover.role !== 'gallery'" :class="{ 'is-role': !cover.caption }">{{ cover.caption || cover.role }}</figcaption>
+      <span v-if="morePhotos" class="log-card__more">+{{ morePhotos }} {{ morePhotos === 1 ? 'photo' : 'photos' }}</span>
+    </figure>
 
-    <div v-if="log.finding_decisions?.length" class="finding-list">
-      <div v-for="(entry, index) in log.finding_decisions" :key="index" class="finding-decision">
-        <div>
-          <span>Finding</span>
-          <p>{{ entry.finding }}</p>
-        </div>
-        <div>
-          <span>Decision</span>
-          <p>{{ entry.decision }}</p>
-        </div>
-      </div>
-    </div>
+    <p v-if="log.finding_decisions?.length" class="log-card__findings">
+      {{ log.finding_decisions.length }} {{ log.finding_decisions.length === 1 ? 'finding & decision' : 'findings & decisions' }}
+    </p>
 
     <WorkshopSocial v-if="projectSlug" :project-id="log.project_id" :log-id="log.id" compact :summary="social" :discussion-to="`/projects/${projectSlug}/logs/${log.slug}#workshop-notes`" />
     <footer v-if="itemUsages?.length || projectSlug" class="log-card__footer">
       <div v-if="itemUsages?.length" class="log-card__parts"><span>Issued from stores</span><strong v-for="usage in itemUsages" :key="usage.id">{{ usage.projectItem.item.name }}<small v-if="usage.usage_amount"> × {{ usage.usage_amount }}</small></strong></div>
-      <NuxtLink v-if="projectSlug" :to="`/projects/${projectSlug}/logs/${log.slug}`">Open work order →</NuxtLink>
+      <NuxtLink v-if="projectSlug" :to="`/projects/${projectSlug}/logs/${log.slug}`">Open session →</NuxtLink>
     </footer>
   </article>
 </template>

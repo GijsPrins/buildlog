@@ -598,6 +598,16 @@ export function useDemoStore() {
     persist()
   }
 
+  function setCurrentPhase(projectId: string, phaseId: string) {
+    accounts.requireRole(projectId, true)
+    const project = database.value.projects.find(entry => entry.id === projectId)
+    if (!project) throw new Error('Project not found.')
+    if (!database.value.phases.some(phase => phase.id === phaseId && phase.project_id === projectId && !phase.archived_at)) throw new Error('Choose an active stage.')
+    project.current_phase_id = phaseId
+    project.updated_at = new Date().toISOString()
+    persist()
+  }
+
   function addLog(input: DemoLogInput) {
     accounts.requireRole(input.projectId)
     const now = new Date().toISOString()
@@ -761,5 +771,5 @@ export function useDemoStore() {
     persist()
   }
 
-  return { socialEntries, setApproval, saveComment, removeComment, createOwnedItem, workshopItems, deleteLog, listSpecifications, saveSpecification, deleteSpecification, ownedItems, linkOwnedItem, editLedgerEntry, editOwnedItem, deleteLocalAccount, initialize, listProjects, getProject, getLog, listProjectItems, listProjectLogUsage, createProject, updateProject, updateProjectTheme, addProjectItem, addLog, updateLog, reset }
+  return { socialEntries, setApproval, saveComment, removeComment, createOwnedItem, workshopItems, deleteLog, listSpecifications, saveSpecification, deleteSpecification, ownedItems, linkOwnedItem, editLedgerEntry, editOwnedItem, deleteLocalAccount, initialize, listProjects, getProject, getLog, listProjectItems, listProjectLogUsage, createProject, updateProject, updateProjectTheme, setCurrentPhase, addProjectItem, addLog, updateLog, reset }
 }

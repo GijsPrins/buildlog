@@ -12,7 +12,7 @@ const style = computed(() => ({ ...Object.fromEntries(Object.entries(props.theme
     <figure><img :src="photoSrc || photo" :alt="photoSrc ? 'Project cover in the theme preview' : 'Sample workshop photograph'"><figcaption>The object that started the story.</figcaption></figure>
     <ol class="preview-phases" aria-label="Example phase progress"><li>Planning</li><li aria-current="step">Inspection</li><li>Assembly</li></ol>
     <dl class="preview-stats" aria-label="Example project statistics"><div><dt>Sessions</dt><dd>6</dd></div><div><dt>Bench time</dt><dd>8h 30m</dd></div><div><dt>Project cost</dt><dd>€240</dd></div></dl>
-    <article><span class="stage">INSPECTION</span><h3>Back at the bench</h3><p>A good afternoon in the workshop. Cleaned the surfaces, checked the moving parts and made a plan for the next session.</p><small>01 OCT / 1h 30m · Recorded by a builder</small><div class="chips"><span>Workshop notes</span><span>Parts &amp; materials</span></div><span class="preview-button">+ Workshop log</span>
+    <article><span class="stage">INSPECTION</span><h3>Back at the bench</h3><p>A good afternoon in the workshop. Cleaned the surfaces, checked the moving parts and made a plan for the next session.</p><small>01 OCT / 1h 30m · Recorded by a builder</small><div class="chips"><span>Workshop notes</span><span>Parts &amp; materials</span></div><span class="preview-button">+ Log session</span>
       <dl class="preview-decision"><div><dt>Finding</dt><dd>A little wear, but the original marking is still clear.</dd></div><div><dt>Decision</dt><dd>Document the marking and replace the worn part.</dd></div></dl>
       <div class="preview-cost"><span>Replacement part <small>Available</small></span><strong>€18.50</strong></div>
     </article>

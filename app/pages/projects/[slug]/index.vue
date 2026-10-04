@@ -82,15 +82,45 @@ const storyChapters = computed(() => project.value ? [
 ] : [])
 const hasStory = computed(() => storyChapters.value.some(chapter => chapter.text))
 const projectStyle = computed(() => projectThemeStyle(project.value?.theme_config))
+const notFound = ref(false)
+// The floating log button only appears once the main one has scrolled out of view.
+const heroLog = ref<{ $el: Element } | null>(null)
+const heroLogVisible = ref(true)
+let heroObserver: IntersectionObserver | null = null
+watch(heroLog, link => {
+  heroObserver?.disconnect(); heroObserver = null
+  if (!(link?.$el instanceof Element)) { heroLogVisible.value = true; return }
+  heroObserver = new IntersectionObserver(([entry]) => { heroLogVisible.value = Boolean(entry?.isIntersecting) })
+  heroObserver.observe(link.$el)
+})
+onBeforeUnmount(() => heroObserver?.disconnect())
+const currentPhaseIndex = computed(() => activePhases.value.findIndex(phase => phase.id === project.value?.current_phase_id))
+const phaseBusy = ref(false)
+const phaseError = ref('')
+
+async function setCurrentPhase(phaseId: string) {
+  if (!project.value || !isOwner.value || phaseBusy.value || phaseId === project.value.current_phase_id) return
+  phaseBusy.value = true; phaseError.value = ''
+  try {
+    if (demoMode.value) demo.setCurrentPhase(project.value.id, phaseId)
+    else {
+      const { error } = await useSupabase()!.from('projects').update({ current_phase_id: phaseId }).eq('id', project.value.id).select('id').single()
+      if (error) throw error
+    }
+    project.value.current_phase_id = phaseId
+  } catch (cause) { phaseError.value = cause instanceof Error ? cause.message : 'Could not change the current stage.' }
+  finally { phaseBusy.value = false }
+}
 
 async function loadProject() {
-  loading.value = true; errorMessage.value = ''; membership.value = null
+  loading.value = true; errorMessage.value = ''; notFound.value = false; membership.value = null
   try {
     if (demoMode.value) {
       await useLocalAccounts().initialize()
       demo.initialize()
       const data = demo.getProject(slug.value)
       if (!data) {
+        notFound.value = true
         errorMessage.value = 'Project not found in this browser.'
         loading.value = false
         return
@@ -124,6 +154,7 @@ async function loadProject() {
       .maybeSingle()
 
     if (error || !projectData) {
+      notFound.value = !error
       errorMessage.value = error?.message || 'Project not found or not available to you.'
       loading.value = false
       return
@@ -180,14 +211,16 @@ onMounted(loadProject)
   <div v-else-if="errorMessage" class="empty-state">
     <h2>Project unavailable</h2>
     <p>{{ errorMessage }}</p>
-    <button type="button" class="button" @click="loadProject">Try again</button>
-    <NuxtLink class="button" to="/">Back to projects</NuxtLink>
+    <div class="empty-state__actions">
+      <NuxtLink class="button" to="/">Back to projects</NuxtLink>
+      <button v-if="!notFound" type="button" class="button button--secondary" @click="loadProject">Try again</button>
+    </div>
   </div>
   <div v-else-if="project" class="project-workshop" :class="[`project-texture--${project.theme_config.decoration?.texture || 'none'}`, `project-frame--${project.theme_config.decoration?.imageFrame || 'none'}`]" :style="projectStyle">
     <section class="project-work-order">
       <div class="project-work-order__bar">
         <NuxtLink to="/">← Workshop board</NuxtLink>
-        <span>Work order // {{ currentPhase?.name || 'Unassigned' }}</span>
+        <span>Current stage // {{ currentPhase?.name || 'Unassigned' }}</span>
       </div>
 
       <div class="project-work-order__grid">
@@ -196,12 +229,19 @@ onMounted(loadProject)
           <h1>{{ project.name }}</h1>
           <p class="project-work-order__intro">{{ project.subtitle || project.description }}</p>
           <div class="project-work-order__actions">
-            <NuxtLink v-if="canEdit" class="button" :to="`/projects/${project.slug}/logs/new`">+ Quick workshop log</NuxtLink>
+            <NuxtLink v-if="canEdit" ref="heroLog" class="button" :to="`/projects/${project.slug}/logs/new`">+ Log session</NuxtLink>
             <NuxtLink class="button button--ghost" :to="`/projects/${project.slug}/specs`">Specifications</NuxtLink>
-            <NuxtLink v-if="isOwner" class="button button--ghost" :to="`/projects/${project.slug}/theme`">Theme Workshop</NuxtLink>
-            <NuxtLink v-if="isOwner" class="button button--ghost project-work-order__edit" :to="`/projects/${project.slug}/edit`">Edit project</NuxtLink>
-            <a class="project-work-order__jump" href="#build-log">View workshop sessions ↓</a>
-            <a class="project-work-order__jump" href="#project-workshop-notes">Join the bench ↓</a>
+            <details v-if="isOwner" class="manage-menu">
+              <summary class="button button--ghost">Manage project</summary>
+              <div>
+                <NuxtLink :to="`/projects/${project.slug}/edit`">Edit project</NuxtLink>
+                <NuxtLink :to="`/projects/${project.slug}/theme`">Theme Workshop</NuxtLink>
+              </div>
+            </details>
+          </div>
+          <div class="project-work-order__jumps">
+            <a class="project-work-order__jump" href="#build-log">Sessions ↓</a>
+            <a class="project-work-order__jump" href="#project-workshop-notes">Notes ↓</a>
           </div>
           <CopyProjectTheme v-if="!isOwner" :key="project.id" :theme="project.theme_config" :project-name="project.name" />
         </div>
@@ -257,12 +297,16 @@ onMounted(loadProject)
         <li
           v-for="(phase, index) in activePhases"
           :key="phase.id"
-          :class="{ current: phase.id === project.current_phase_id }"
+          :class="{ current: index === currentPhaseIndex, done: currentPhaseIndex > -1 && index < currentPhaseIndex }"
+          :aria-current="index === currentPhaseIndex ? 'step' : undefined"
         >
-          <span>{{ String(index + 1).padStart(2, '0') }}</span>
-          {{ phase.name }}
+          <span>{{ index < currentPhaseIndex ? '✓' : String(index + 1).padStart(2, '0') }}</span>
+          <button v-if="isOwner && index !== currentPhaseIndex" type="button" :disabled="phaseBusy" :aria-label="`Make ${phase.name} the current stage`" @click="setCurrentPhase(phase.id)">{{ phase.name }}</button>
+          <template v-else>{{ phase.name }}</template>
         </li>
       </ol>
+      <p v-if="isOwner" class="project-phase-hint">Select a stage to make it current.</p>
+      <p v-if="phaseError" class="form-error" role="alert">{{ phaseError }}</p>
     </section>
 
     <section v-if="images.some(image => !image.log_id)" class="project-photo-archive">
@@ -302,7 +346,6 @@ onMounted(loadProject)
           <p class="eyebrow">Work, in order</p>
           <h2 id="project-log-heading">Workshop sessions</h2>
         </div>
-        <NuxtLink v-if="canEdit" class="button" :to="`/projects/${project.slug}/logs/new`">Add a log</NuxtLink>
       </header>
 
       <div v-if="logs.length" class="timeline project-timeline">
@@ -320,10 +363,12 @@ onMounted(loadProject)
       </div>
       <div v-else class="empty-state">
         <h2>The bench is ready</h2>
-        <p>The first Log can be an inspection, a purchase story, or simply a photograph of the starting point.</p>
-        <NuxtLink v-if="canEdit" class="button" :to="`/projects/${project.slug}/logs/new`">Add the first log</NuxtLink>
+        <p>The first session can be an inspection, a purchase story, or simply a photograph of the starting point.</p>
+        <NuxtLink v-if="canEdit" class="button" :to="`/projects/${project.slug}/logs/new`">Log the first session</NuxtLink>
       </div>
     </section>
     <WorkshopSocial id="project-workshop-notes" :project-id="project.id" />
+    <!-- Keeps the main action within thumb reach on phones once the header has scrolled away. -->
+    <NuxtLink v-if="canEdit && logs.length && !heroLogVisible" class="button project-log-fab" :to="`/projects/${project.slug}/logs/new`">+ Log session</NuxtLink>
   </div>
 </template>
