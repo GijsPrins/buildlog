@@ -3,16 +3,18 @@ export interface LocalMember { projectId: string; userId: string; role: 'owner' 
 interface LocalAccounts { accounts: LocalAccount[]; members: LocalMember[]; invitations: Array<{ id: string; projectId: string; email: string; role: 'contributor' | 'reader'; expiresAt: string }>; sessionId: string | null }
 const KEY = 'buildlog-local-accounts-v1'
 let initialization: Promise<void> | null = null
+// Rollback snapshot of the last stored accounts; kept out of useState so it never enters the SSR payload.
+let committedAccounts: string | undefined
 
 export function useLocalAccounts() {
   const state = useState<LocalAccounts>('local-accounts', () => ({ accounts: [], members: [], invitations: [], sessionId: null }))
   const ready = useState('local-accounts-ready', () => false)
   const current = computed(() => state.value.accounts.find(account => account.id === state.value.sessionId) || null)
-  const committed = useState('local-accounts-committed', () => JSON.stringify(state.value))
+  committedAccounts ??= JSON.stringify(state.value)
   function persist() {
-    try { localStorage.setItem(KEY, JSON.stringify(state.value)); committed.value = JSON.stringify(state.value) }
+    try { localStorage.setItem(KEY, JSON.stringify(state.value)); committedAccounts = JSON.stringify(state.value) }
     catch {
-      state.value = JSON.parse(committed.value)
+      state.value = JSON.parse(committedAccounts!)
       throw new Error('This browser could not save the local account change. Check available demo storage and retry.')
     }
   }
@@ -26,7 +28,7 @@ export function useLocalAccounts() {
     if (initialization) return initialization
     initialization = (async () => {
       const saved = localStorage.getItem(KEY)
-      if (saved) { state.value = JSON.parse(saved); committed.value = saved }
+      if (saved) { state.value = JSON.parse(saved); committedAccounts = saved }
       else {
         const salt = crypto.randomUUID()
         state.value.accounts.push({ id: 'demo-user', email: 'builder@buildlog.local', name: 'Demo builder', salt, passwordHash: await hash('Workshop2026!', salt) })
@@ -52,7 +54,7 @@ export function useLocalAccounts() {
     state.value.members.push({ projectId, userId: current.value.id, role: 'owner' }); persist()
   }
   function restoreSnapshot(snapshot: string) {
-    state.value = JSON.parse(snapshot); committed.value = snapshot
+    state.value = JSON.parse(snapshot); committedAccounts = snapshot
     try { persist() } catch { /* Keep the complete in-memory snapshot if storage is unavailable. */ }
   }
   function acceptInvitations(account: LocalAccount) {

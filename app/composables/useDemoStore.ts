@@ -6,6 +6,8 @@ import type { ImageRole, ProjectSpec, Item, LogItemUsage, LogItemUsageDetail, Pr
 import { normalizeSpecification } from '../utils/specifications'
 
 const STORAGE_KEY = 'buildlog-demo-v5'
+// Rollback snapshot of the last stored demo; kept out of useState so it never enters the SSR payload.
+let committedDemo: string | undefined
 
 interface DemoDatabase {
   socialSeedVersion?: number
@@ -302,7 +304,7 @@ export function useDemoStore() {
   const database = useState<DemoDatabase>('demo-database', createDemoDatabase)
   const accounts = useLocalAccounts()
   const initialized = useState('demo-initialized', () => false)
-  const committed = useState('demo-committed', () => JSON.stringify(database.value))
+  committedDemo ??= JSON.stringify(database.value)
 
   function initialize() {
     if (initialized.value || !import.meta.client) return
@@ -330,7 +332,7 @@ export function useDemoStore() {
     database.value.projectItems ??= []
     database.value.logItemUsage ??= []
     accounts.ensureOwners(database.value.projects.map(project => project.id))
-    committed.value = JSON.stringify(database.value)
+    committedDemo = JSON.stringify(database.value)
     initialized.value = true
     if (seedDemoSocial(database.value)) {
       // An automatic seed upgrade must not prevent opening an existing full demo.
@@ -342,9 +344,9 @@ export function useDemoStore() {
     const next = JSON.stringify(database.value)
     try {
       if (import.meta.client) localStorage.setItem(STORAGE_KEY, next)
-      committed.value = next
+      committedDemo = next
     } catch (cause) {
-      database.value = JSON.parse(committed.value) as DemoDatabase
+      database.value = JSON.parse(committedDemo!) as DemoDatabase
       const quota = cause instanceof DOMException && ['QuotaExceededError', 'NS_ERROR_DOM_QUOTA_REACHED'].includes(cause.name)
       throw new Error(quota
         ? 'This browser’s demo storage is full. Your previous records are safe. Remove some selected photos or use smaller originals and retry. You can reset the local demo to clear all its records.'
@@ -500,15 +502,6 @@ export function useDemoStore() {
     persist()
   }
 
-  function setItemAllocation(projectId: string, entryId: string, amount: number | null) {
-    accounts.requireRole(projectId)
-    const entry = database.value.projectItems.find(item => item.id === entryId && item.project_id === projectId)
-    if (!entry) throw new Error('Item unavailable.')
-    if (amount !== null && (!Number.isFinite(amount) || amount < 0)) throw new Error('Invalid allocation.')
-    entry.attributed_amount = amount
-    persist()
-  }
-
   function createProject(input: DemoProjectInput) {
     if (!accounts.current.value) throw new Error('Sign in to start a project.')
     if (database.value.projects.some(project => project.slug === input.slug)) throw new Error('That workshop address is already in use.')
@@ -543,7 +536,7 @@ export function useDemoStore() {
       database.value.phases.push(...phases)
       persist()
     } catch (cause) {
-      database.value = JSON.parse(committed.value) as DemoDatabase
+      database.value = JSON.parse(committedDemo!) as DemoDatabase
       accounts.restoreSnapshot(accountSnapshot)
       throw cause
     }
@@ -768,5 +761,5 @@ export function useDemoStore() {
     persist()
   }
 
-  return { socialEntries, setApproval, saveComment, removeComment, createOwnedItem, workshopItems, deleteLog, listSpecifications, saveSpecification, deleteSpecification, ownedItems, linkOwnedItem, editLedgerEntry, editOwnedItem, deleteLocalAccount, initialize, listProjects, getProject, getLog, listProjectItems, listProjectLogUsage, createProject, updateProject, updateProjectTheme, setItemAllocation, addProjectItem, addLog, updateLog, reset }
+  return { socialEntries, setApproval, saveComment, removeComment, createOwnedItem, workshopItems, deleteLog, listSpecifications, saveSpecification, deleteSpecification, ownedItems, linkOwnedItem, editLedgerEntry, editOwnedItem, deleteLocalAccount, initialize, listProjects, getProject, getLog, listProjectItems, listProjectLogUsage, createProject, updateProject, updateProjectTheme, addProjectItem, addLog, updateLog, reset }
 }

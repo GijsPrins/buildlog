@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import type { WorkshopComment, WorkshopThread, WorkshopReply } from '~/utils/workshopSocial'
+import type { WorkshopComment, WorkshopThread, WorkshopReply, WorkshopSummary } from '~/utils/workshopSocial'
 import { commentLimit, normalizeComment } from '~/utils/workshopSocial'
 
-const props = defineProps<{ projectId: string; logId?: string; compact?: boolean; discussionTo?: string }>()
+const props = defineProps<{ projectId: string; logId?: string; compact?: boolean; discussionTo?: string; summary?: WorkshopSummary }>()
 const auth = useAuth()
 const demo = useDemoStore()
 const local = useLocalAccounts()
@@ -30,6 +30,8 @@ const removingId = ref('')
 const signInTo = computed(() => ({ path: '/login', query: { redirect: route.fullPath } }))
 const subject = computed(() => props.logId ? 'session' : 'project')
 let generation = 0
+// A parent-provided summary is used until this card changes something; then it reads its own counts.
+let refreshed = false
 const pageSize = 20
 
 function target(table: 'workshop_comments' | 'workshop_approvals' | 'workshop_threads', head = false) {
@@ -111,6 +113,10 @@ async function load() {
       commentCount.value = entries.comments.filter(note => !note.deleted_at).length
       approved.value = entries.approvals.some(entry => entry.user_id === auth.user.value?.id)
       owner.value = local.role(props.projectId) === 'owner'
+    } else if (props.compact && props.summary && !refreshed) {
+      approvalCount.value = props.summary.approvals
+      commentCount.value = props.summary.notes
+      approved.value = props.summary.approved
     } else {
       const userId = auth.user.value?.id
       const [approvals, notes, mine, membership] = await Promise.all([
@@ -138,7 +144,7 @@ async function run(action: () => Promise<void>) {
   if (busy.value) return
   const current = generation
   busy.value = true; error.value = ''; message.value = ''
-  try { await action(); if (current === generation) await load() }
+  try { await action(); refreshed = true; if (current === generation) await load() }
   catch (cause) { if (current === generation) error.value = cause instanceof Error ? cause.message : 'The workshop could not save that change. Try again.' }
   finally { if (current === generation) busy.value = false }
 }

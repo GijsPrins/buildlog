@@ -67,7 +67,8 @@ describe('local workshop accounts', () => {
       currentPhaseKey: project.current_phase_id, phases: data.phases.map(phase => ({ key: phase.id, id: phase.id, name: phase.name, archived: false })), heroImage: null }
     demo.updateProject(input)
     expect(project.currency_code).toBe('USD')
-    demo.setItemAllocation(project.id, 'gios-project-item-bike', 0)
+    const bike = data.projectItems.find(entry => entry.id === 'gios-project-item-bike')!
+    demo.editLedgerEntry(project.id, bike.id, { role: bike.role, status: bike.status, notes: bike.notes, attributed_amount: 0 })
     demo.updateProject({ ...input, itemsEnabled: false })
     expect(() => demo.updateProject({ ...input, itemsEnabled: false, currencyCode: 'EUR' })).toThrow('cannot change')
     expect(project.currency_code).toBe('USD')

@@ -109,6 +109,8 @@ async function save() {
     const invalidTheme = validateTheme(theme.value)
     if (invalidTheme) throw new Error(invalidTheme)
     const cleanSlug = slugify(projectSlug.value)
+    // Saved phases must stay in the record; a blank one cannot simply be dropped.
+    if (phases.value.some(phase => phase.id && !phase.name.trim())) throw new Error('Name every existing phase, or archive it instead.')
     const usablePhases = phases.value.filter(phase => phase.name.trim())
     if (!usablePhases.some(phase => !phase.archived)) throw new Error('Keep at least one active project phase.')
     if (heroFile.value && demoMode.value && heroFile.value.size > 2_500_000) throw new Error('The demo cover can be at most 2.5 MB.')

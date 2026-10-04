@@ -31,3 +31,6 @@ export interface WorkshopApproval {
   log_id: string | null
   user_id: string
 }
+
+/** Counts a parent page loads in one batch so compact log cards need no queries of their own. */
+export interface WorkshopSummary { approvals: number; notes: number; approved: boolean }

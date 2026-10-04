@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { collectPages } from '~/utils/workshopFinancials'
 import { checkedData } from '~/utils/workshopSaves'
+import type { WorkshopSummary } from '~/utils/workshopSocial'
 import type {
   Project,
   ProjectImage,
@@ -30,6 +31,23 @@ const canEdit = computed(() => membership.value?.role === 'owner' || membership.
 const isOwner = computed(() => membership.value?.role === 'owner')
 const currentPhase = computed(() => phases.value.find(phase => phase.id === project.value?.current_phase_id))
 const phaseNames = computed(() => new Map(phases.value.map(phase => [phase.id, phase.name])))
+// Archived phases still name their logs, but leave the build sequence.
+const activePhases = computed(() => phases.value.filter(phase => !phase.archived_at))
+const socialSummaries = ref<Map<string, WorkshopSummary> | null>(null)
+const emptySocial: WorkshopSummary = { approvals: 0, notes: 0, approved: false }
+
+async function loadSocialSummaries(projectId: string, userId?: string) {
+  const supabase = useSupabase()!
+  const [approvals, notes] = await Promise.all([
+    collectPages<{ log_id: string; user_id: string }>((from, to) => supabase.from('workshop_approvals').select('log_id,user_id', { count: 'exact' }).eq('project_id', projectId).not('log_id', 'is', null).order('id').range(from, to)),
+    collectPages<{ log_id: string }>((from, to) => supabase.from('workshop_comments').select('log_id', { count: 'exact' }).eq('project_id', projectId).not('log_id', 'is', null).is('deleted_at', null).order('id').range(from, to))
+  ])
+  const summaries = new Map<string, WorkshopSummary>()
+  const entry = (logId: string) => summaries.get(logId) ?? summaries.set(logId, { ...emptySocial }).get(logId)!
+  for (const row of approvals) { const summary = entry(row.log_id); summary.approvals++; if (row.user_id === userId) summary.approved = true }
+  for (const row of notes) entry(row.log_id).notes++
+  return summaries
+}
 const imagesByLog = computed(() => {
   const grouped = new Map<string, Array<ProjectImage & { signedUrl?: string }>>()
   for (const image of images.value) {
@@ -122,14 +140,13 @@ async function loadProject() {
     if (authResult.error && authResult.error.name !== 'AuthSessionMissingError') throw new Error(authResult.error.message)
     phases.value = phaseData; logs.value = logData
     await loadAuthors(logData)
-    images.value = await Promise.all(baseImages.map(async image => {
-      const result = await supabase.storage
+    // One unavailable original must not hide the whole project; skip that photo instead.
+    images.value = (await Promise.all(baseImages.map(async image => {
+      const { data: signed } = await supabase.storage
         .from('project-originals')
         .createSignedUrl(image.storage_path, 3600)
-      const signed = checkedData(result)
-      if (!signed?.signedUrl) throw new Error('Could not load the original photo.')
-      return { ...image, signedUrl: signed.signedUrl }
-    }))
+      return signed?.signedUrl ? [{ ...image, signedUrl: signed.signedUrl }] : []
+    }))).flat()
 
     if (authResult.data.user) {
       const memberResult = await supabase
@@ -140,6 +157,8 @@ async function loadProject() {
         .maybeSingle()
       membership.value = checkedData(memberResult) as ProjectMembership | null
     }
+    // Optional: without these, each log card falls back to loading its own counts.
+    socialSummaries.value = logData.length ? await loadSocialSummaries(project.value.id, authResult.data.user?.id).catch(() => null) : null
 
     if (project.value.items_enabled) {
       const [itemData, usageData] = await Promise.all([
@@ -226,7 +245,7 @@ onMounted(loadProject)
       </div>
     </section>
 
-    <section v-if="phases.length" class="project-sequence" aria-labelledby="project-sequence-heading">
+    <section v-if="activePhases.length" class="project-sequence" aria-labelledby="project-sequence-heading">
       <header class="project-section-marker project-section-marker--compact">
         <span>01</span>
         <div>
@@ -236,7 +255,7 @@ onMounted(loadProject)
       </header>
       <ol class="project-phase-track" aria-label="Project phases">
         <li
-          v-for="(phase, index) in phases"
+          v-for="(phase, index) in activePhases"
           :key="phase.id"
           :class="{ current: phase.id === project.current_phase_id }"
         >
@@ -296,6 +315,7 @@ onMounted(loadProject)
           :images="imagesByLog.get(log.id)"
           :item-usages="usageByLog.get(log.id)"
           :project-slug="project.slug"
+          :social="socialSummaries ? socialSummaries.get(log.id) ?? emptySocial : undefined"
         />
       </div>
       <div v-else class="empty-state">

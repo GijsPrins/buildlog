@@ -134,6 +134,9 @@ async function submit() {
     if (authError || !data.user) throw new Error('Your session expired. Sign in again.')
     projectId.value ||= crypto.randomUUID()
     for (const phase of usablePhases) phase.id ||= crypto.randomUUID()
+    // A retry may resume a project created by an earlier attempt: phases it sent stay in the payload, archived if removed.
+    const sentPhases = phases.value.filter(phase => phase.id)
+    if (sentPhases.some(phase => !phase.name.trim())) throw new Error('Name every phase, or archive it instead.')
     const current = usablePhases.find(phase => phase.key === currentPhaseKey.value)
     const cleanSlug = slugify(slug.value)
     await saveProjectCreation(supabase, {
@@ -143,7 +146,7 @@ async function submit() {
       current_phase_id: current?.id || null, hero_image_id: null, is_completed: false, is_public: isPublic.value,
       currency_code: currencyCode.value.toUpperCase(), items_enabled: itemsEnabled.value,
       cost_tracking_enabled: itemsEnabled.value && costsEnabled.value, theme_config: theme.value
-    }, usablePhases.map((phase, index) => ({ id: phase.id, name: phase.name.trim(), archived: false, sort_order: index })),
+    }, sentPhases.map((phase, index) => ({ id: phase.id, name: phase.name.trim(), archived: phase.archived, sort_order: index })),
       heroFile.value ? { id: heroId.value, file: heroFile.value, role: 'before', caption: `The starting point for ${name.value.trim()}.` } : null, data.user.id)
     await navigateTo(`/projects/${cleanSlug}`)
   } catch (cause) { errorMessage.value = cause instanceof Error ? cause.message : 'Could not save the project. Retry to resume the same project.' }
@@ -154,8 +157,8 @@ async function submit() {
 
 <template>
   <section class="form-card" aria-label="Project starting point">
-    <label class="field"><span>Starting point</span><select v-model="templateId" :disabled="busy"><option value="">Start without a template</option><option v-for="template in projectTemplates" :key="template.id" :value="template.id">{{ template.name }}</option></select></label>
-    <button class="button button--ghost" type="button" :disabled="busy" @click="applyTemplate">Apply starting point</button>
+    <label class="field"><span>Starting point</span><select v-model="templateId" :disabled="busy || Boolean(projectId)"><option value="">Start without a template</option><option v-for="template in projectTemplates" :key="template.id" :value="template.id">{{ template.name }}</option></select></label>
+    <button class="button button--ghost" type="button" :disabled="busy || Boolean(projectId)" @click="applyTemplate">Apply starting point</button>
     <p class="muted">Applying replaces the phases, palette and ledger defaults. Your name, story and photo stay.</p>
     <p>{{ projectTemplates.find(template => template.id === templateId)?.description || 'Choose your own phases, facts and visual identity for any kind of build.' }}</p>
     <p class="muted">These are starting defaults. Everything belongs to your project once it is created. Optional specification suggestions are available in its dossier.</p>

@@ -8,7 +8,6 @@ export interface LogSaveInput {
   usage: Array<Record<string, unknown>> | null
   imageEdits: Array<Record<string, unknown>>
   photos: UploadPhoto[]
-  sortOffset?: number
   removedPhotoIds?: string[]
 }
 
@@ -16,9 +15,9 @@ export async function saveWorkshopLog(client: SupabaseClient, input: LogSaveInpu
   const { data, error } = await client.rpc('save_workshop_log', {
     p_log: input.log, p_usage: input.usage, p_image_edits: [...input.imageEdits,
       ...(input.removedPhotoIds ?? []).map(id => ({ id, removed: true, pending: true, role: 'gallery', caption: null }))],
-    p_new_images: input.photos.map((photo, index) => ({
+    p_new_images: input.photos.map(photo => ({
       id: photo.id, name: photo.file.name, type: photo.file.type || 'image/jpeg', size: photo.file.size,
-      role: photo.role, caption: photo.caption.trim() || null, sort_order: (input.sortOffset ?? 0) + index
+      role: photo.role, caption: photo.caption.trim() || null
     }))
   })
   if (error) throw new Error(error.message)
