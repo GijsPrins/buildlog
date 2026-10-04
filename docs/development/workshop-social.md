@@ -25,6 +25,14 @@ Security/performance advisors found no notices on the new tables. Existing leake
 The first delivery used flat conversations; the Reply delivery below adds grouped answers. Notifications, reports and automated abuse handling remain follow-up work. The current controls are verified accounts, text limits, immutable attribution, author editing/removal, and owner removal. No notification messages or emails are sent by commenting or stamping.
 
 
+## Demo conversations
+
+Both built-in demo projects and all four demo sessions include fictional workshop notes and stamps of approval. Project and session conversations include answers; the Peugeot project also demonstrates replying to an answer. Fictional visitor identities are local sample data, not registered accounts. The current demo builder starts without a stamp so visitors can try adding and withdrawing their own.
+
+Saved demos receive the examples once, identified by socialSeedVersion. The upgrade preserves personal notes and edits, skips deleted projects/sessions, avoids duplicate IDs and stamps, and persists its marker. Removed examples do not return on reload. Resetting the demo restores the complete sample. No production database data is seeded.
+
+Validation: 59 application tests, Nuxt typecheck and Pages generation passed. Browser checks covered seeded project/session conversations, reply context, adding/withdrawing a stamp, widths of 320/390/768 pixels, and upgrading an existing saved demo while retaining a personal note without duplication on reload.
+
 ## Reply delivery
 
 Every available note has a Reply action, including replies themselves. The editor names and quotes the selected recipient. Answers remain grouped under the original root with one visual indentation, and show their immediate parent for context. Roots and replies display newest first. Existing answers open through View replies; expanded threads stay open after changes and new answers are immediately visible. Roots and answers have independent 20-row cursor pagination.

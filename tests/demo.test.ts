@@ -1,7 +1,49 @@
 import { describe, expect, it } from 'vitest'
 import { createDemoDatabase } from '../app/composables/useDemoStore'
+import { seedDemoSocial } from '../app/utils/demoSocial'
 
 describe('demo database', () => {
+  it('shows conversations, nested answers and stamps on both projects and every session', () => {
+    const demo = createDemoDatabase()
+    for (const target of [...demo.projects.map(project => ({ project_id: project.id, log_id: null })), ...demo.logs.map(log => ({ project_id: log.project_id, log_id: log.id }))]) {
+      expect(demo.comments!.some(note => note.project_id === target.project_id && note.log_id === target.log_id)).toBe(true)
+      expect(demo.approvals!.some(stamp => stamp.project_id === target.project_id && stamp.log_id === target.log_id)).toBe(true)
+    }
+    for (const note of demo.comments!) {
+      expect(demo.projects.some(project => project.id === note.project_id)).toBe(true)
+      if (note.log_id) expect(demo.logs.some(log => log.id === note.log_id && log.project_id === note.project_id)).toBe(true)
+      if (note.parent_id) {
+        const parent = demo.comments!.find(entry => entry.id === note.parent_id)!
+        expect(parent).toMatchObject({ project_id: note.project_id, log_id: note.log_id, thread_id: note.thread_id })
+        expect(parent.created_at < note.created_at).toBe(true)
+      } else expect(note.thread_id).toBe(note.id)
+    }
+    expect(demo.comments!.some(note => demo.comments!.find(parent => parent.id === note.parent_id)?.parent_id)).toBe(true)
+    const stampKeys = demo.approvals!.map(stamp => `${stamp.project_id}/${stamp.log_id}/${stamp.user_id}`)
+    expect(new Set(stampKeys).size).toBe(stampKeys.length)
+    expect(demo.approvals!.some(stamp => stamp.user_id === 'demo-user')).toBe(false)
+  })
+
+  it('upgrades saved demos once while preserving edits and respecting deleted targets', () => {
+    const demo = createDemoDatabase()
+    delete demo.socialSeedVersion
+    const custom = { ...demo.comments![0]!, id: 'my-note', thread_id: 'my-note', content: 'My existing note' }
+    demo.comments = [custom]
+    demo.approvals = []
+    demo.projects = demo.projects.filter(project => project.id !== 'demo-peugeot')
+    demo.logs = []
+    expect(seedDemoSocial(demo)).toBe(true)
+    expect(demo.comments).toContain(custom)
+    expect(demo.comments!.filter(note => note.id !== custom.id).every(note => note.project_id === 'demo-gios' && note.log_id === null)).toBe(true)
+    expect(demo.approvals!.every(stamp => stamp.project_id === 'demo-gios' && stamp.log_id === null)).toBe(true)
+    demo.comments = [custom]
+    demo.approvals = []
+    const reloaded = JSON.parse(JSON.stringify(demo))
+    expect(seedDemoSocial(reloaded)).toBe(false)
+    expect(reloaded.comments).toEqual([custom])
+    expect(reloaded.approvals).toEqual([])
+  })
+
   it('contains a complete project timeline', () => {
     const demo = createDemoDatabase()
     const project = demo.projects.find(entry => entry.slug === 'peugeot-road-bike')

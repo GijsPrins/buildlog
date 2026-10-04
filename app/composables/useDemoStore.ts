@@ -1,5 +1,6 @@
 import type { WorkshopComment, WorkshopApproval } from '~/utils/workshopSocial'
 import { normalizeComment } from '../utils/workshopSocial'
+import { createDemoSocial, seedDemoSocial } from '../utils/demoSocial'
 import type { ImageRole, ProjectSpec, Item, LogItemUsage, LogItemUsageDetail, Project, ProjectImage, ProjectItem, ProjectItemDetail, ProjectItemRole, ProjectItemStatus, ProjectLog, ProjectPhase, ProjectSummary, ThemeConfig } from '~/types/domain'
 
 import { normalizeSpecification } from '../utils/specifications'
@@ -7,6 +8,7 @@ import { normalizeSpecification } from '../utils/specifications'
 const STORAGE_KEY = 'buildlog-demo-v5'
 
 interface DemoDatabase {
+  socialSeedVersion?: number
   comments?: WorkshopComment[]
   approvals?: WorkshopApproval[]
   specifications?: ProjectSpec[]
@@ -239,7 +241,7 @@ export function createDemoDatabase(): DemoDatabase {
   }]
 
   return {
-    comments: [], approvals: [],
+    ...createDemoSocial(),
     projects: [
       {
         id: giosProjectId,
@@ -327,6 +329,7 @@ export function useDemoStore() {
     database.value.logItemUsage ??= []
     accounts.ensureOwners(database.value.projects.map(project => project.id))
     initialized.value = true
+    if (seedDemoSocial(database.value)) persist()
   }
 
   function persist() {
