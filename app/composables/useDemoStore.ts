@@ -424,6 +424,14 @@ export function useDemoStore() {
     persist()
   }
 
+  function workshopItems() {
+    const projects = database.value.projects.filter(project => accounts.role(project.id))
+    const enabled = new Set(projects.filter(project => project.items_enabled).map(project => project.id))
+    const links = database.value.projectItems.filter(link => enabled.has(link.project_id)).map(link => ({ ...link, item: database.value.items.find(item => item.id === link.item_id)! })).filter(link => link.item)
+    const items = [...new Map([...ownedItems(), ...links.map(link => link.item)].map(item => [item.id, item])).values()]
+    return { items, links, projects }
+  }
+
   function ownedItems() {
     return database.value.items.filter(item => item.owner_user_id === accounts.current.value?.id)
   }
@@ -446,6 +454,14 @@ export function useDemoStore() {
     if (changes.role === 'subject' && changes.status !== 'removed' && database.value.projectItems.some(other => other.id !== entryId && other.project_id === projectId && other.role === 'subject' && other.status !== 'removed')) throw new Error('This project already has a subject.')
     Object.assign(entry, changes, { updated_at: new Date().toISOString() })
     persist()
+  }
+
+  function createOwnedItem(changes: Pick<Item, 'name' | 'brand' | 'notes' | 'supplier' | 'url' | 'purchase_amount' | 'purchase_currency_code' | 'estimated_amount' | 'estimated_currency_code'>) {
+    if (!accounts.current.value) throw new Error('Sign in to record an item.')
+    const now = new Date().toISOString()
+    const item: Item = { ...changes, id: crypto.randomUUID(), owner_user_id: accounts.current.value.id, created_by_user_id: accounts.current.value.id, created_at: now, updated_at: now }
+    database.value.items.push(item); persist()
+    return item
   }
 
   function editOwnedItem(itemId: string, changes: Pick<Item, 'name' | 'brand' | 'notes' | 'supplier' | 'url' | 'purchase_amount' | 'purchase_currency_code' | 'estimated_amount' | 'estimated_currency_code'>) {
@@ -660,5 +676,5 @@ export function useDemoStore() {
     persist()
   }
 
-  return { deleteLog, listSpecifications, saveSpecification, deleteSpecification, ownedItems, linkOwnedItem, editLedgerEntry, editOwnedItem, deleteLocalAccount, initialize, listProjects, getProject, getLog, listProjectItems, listProjectLogUsage, createProject, updateProject, updateProjectTheme, setItemAllocation, addProjectItem, addLog, updateLog, reset }
+  return { createOwnedItem, workshopItems, deleteLog, listSpecifications, saveSpecification, deleteSpecification, ownedItems, linkOwnedItem, editLedgerEntry, editOwnedItem, deleteLocalAccount, initialize, listProjects, getProject, getLog, listProjectItems, listProjectLogUsage, createProject, updateProject, updateProjectTheme, setItemAllocation, addProjectItem, addLog, updateLog, reset }
 }

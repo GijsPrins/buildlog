@@ -17,6 +17,34 @@ beforeEach(() => {
 })
 
 describe('local workshop accounts', () => {
+  it('records purchases independently, reuses them in builds and preserves ownership', async () => {
+    const accounts = useLocalAccounts(); await accounts.initialize()
+    const demo = useDemoStore(); demo.initialize()
+    const purchase = demo.createOwnedItem({ name: 'Workshop wrench', brand: null, notes: null, supplier: null, url: null, purchase_amount: 25, purchase_currency_code: 'EUR', estimated_amount: null, estimated_currency_code: null })
+    expect(demo.workshopItems().items.some(item => item.id === purchase.id)).toBe(true)
+    expect(demo.workshopItems().links.some(link => link.item_id === purchase.id)).toBe(false)
+    demo.linkOwnedItem('demo-gios', purchase.id, 'tool', 'available')
+    expect(demo.workshopItems().items.filter(item => item.id === purchase.id)).toHaveLength(1)
+    expect(purchase.owner_user_id).toBe('demo-user')
+    await accounts.register('Inventory outsider', 'inventory-outsider@example.test', 'Workshop2026!')
+    expect(demo.workshopItems().items.some(item => item.id === purchase.id)).toBe(false)
+    accounts.signOut()
+    expect(() => demo.createOwnedItem({} as never)).toThrow('Sign in')
+  })
+  it('scopes workshop purchases to ownership and membership, excluding unrelated public builds', async () => {
+    const accounts = useLocalAccounts(); await accounts.initialize()
+    const demo = useDemoStore(); demo.initialize()
+    const shared = demo.getProject('gios-torino-restoration')!
+    const original = demo.workshopItems()
+    expect(original.items.length).toBeGreaterThan(0)
+    await accounts.register('Purchase reader', 'purchase-reader@example.test', 'Workshop2026!')
+    expect(demo.workshopItems().items).toHaveLength(0)
+    await accounts.signIn('builder@buildlog.local', 'Workshop2026!')
+    accounts.addMember(shared.project.id, 'purchase-reader@example.test', 'reader')
+    await accounts.signIn('purchase-reader@example.test', 'Workshop2026!')
+    expect(demo.workshopItems().items.map(item => item.id).sort()).toEqual(shared.projectItems.map(link => link.item_id).sort())
+    expect(() => demo.editOwnedItem(shared.projectItems[0]!.item.id, {} as never)).toThrow('owner')
+  })
   it('copies project themes independently and keeps theme editing owner-only', async () => {
     const accounts = useLocalAccounts(); await accounts.initialize()
     const demo = useDemoStore(); demo.initialize()

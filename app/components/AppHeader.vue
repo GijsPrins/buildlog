@@ -23,6 +23,7 @@ onMounted(initialize)
         <NuxtLink :class="{ active: route.path === '/' }" to="/">Projects</NuxtLink>
         <NuxtLink v-if="user" to="/projects/new">New project</NuxtLink>
         <NuxtLink v-if="user" to="/themes">Themes</NuxtLink>
+        <NuxtLink v-if="user" to="/purchases">Purchases</NuxtLink>
         <NuxtLink v-if="user" to="/account">{{ user.user_metadata?.display_name || 'Account' }}</NuxtLink>
         <button v-if="user" class="button button--ghost button--small" type="button" @click="signOut">
           Sign out
