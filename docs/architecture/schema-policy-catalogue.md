@@ -182,7 +182,9 @@ Bucket: `project-originals` (private).
 - Application-wide actual expenditure counts every Item purchase once.
 - Project intrinsic cost sums attributed ProjectItem amounts for Subject, Part,
   Material, and External Service.
-- Consumable Project cost sums `log_item_usage.usage_amount`.
+- Consumable Project cost sums `log_item_usage.usage_cost`. The shipped UI used
+  `usage_amount` for quantity; the October 2026 migration preserves those values
+  and adds a separate nullable monetary field rather than reinterpreting old data.
 - Tool purchases are reported separately and never folded into intrinsic cost.
 - Estimated values are planning information only.
 - Project totals are hidden when cost tracking is disabled.

@@ -249,6 +249,7 @@ onMounted(loadProject)
       </ol>
     </section>
 
+    <ProjectFinancials v-if="project.cost_tracking_enabled" :items="projectItems" :usages="logItemUsage" :currency="project.currency_code" />
     <section v-if="project.items_enabled" class="project-materials-section" aria-labelledby="project-materials-heading">
       <header class="project-section-marker">
         <span>02</span>
@@ -265,7 +266,7 @@ onMounted(loadProject)
           <div><strong>{{ entry.item.name }}</strong><small>{{ entry.item.brand || entry.item.notes || 'Unbranded workshop item' }}</small></div>
           <span>{{ entry.role.replace('_', ' ') }}</span>
           <span class="parts-ledger__stamp">{{ entry.status || 'unmarked' }}</span>
-          <strong v-if="project.cost_tracking_enabled">{{ entry.attributed_amount ?? entry.item.purchase_amount ?? '—' }} {{ project.currency_code }}</strong>
+          <strong v-if="project.cost_tracking_enabled">{{ entry.attributed_amount ?? '—' }} {{ project.currency_code }}</strong>
         </article>
       </div>
       <div v-else class="parts-ledger-empty">

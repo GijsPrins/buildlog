@@ -147,6 +147,7 @@ export interface LogItemUsage {
   log_id: string
   project_item_id: string
   usage_amount: number | null
+  usage_cost?: number | null
   note: string | null
   created_at: string
   updated_at: string

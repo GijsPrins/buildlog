@@ -18,6 +18,7 @@ const status = ref<ProjectItemStatus>('planned')
 const notes = ref('')
 const purchaseAmount = ref<number | null>(null)
 const attributedAmount = ref<number | null>(null)
+const estimatedAmount = ref<number | null>(null)
 const demoMode = useDemoMode()
 const demo = useDemoStore()
 
@@ -83,7 +84,7 @@ async function loadMaterials() {
 
 function clearForm() {
   name.value = ''; brand.value = ''; role.value = 'part'; status.value = 'planned'; notes.value = ''
-  purchaseAmount.value = null; attributedAmount.value = null
+  purchaseAmount.value = null; attributedAmount.value = null; estimatedAmount.value = null
 }
 
 async function submit() {
@@ -91,11 +92,15 @@ async function submit() {
   busy.value = true
   errorMessage.value = ''
   try {
+    purchaseAmount.value = optionalAmount(purchaseAmount.value)
+    estimatedAmount.value = optionalAmount(estimatedAmount.value)
+    attributedAmount.value = optionalAmount(attributedAmount.value)
     if (demoMode.value) {
       projectItems.value.push(demo.addProjectItem({
         projectId: project.value.id, name: name.value.trim(), brand: brand.value.trim() || null,
         role: role.value, status: status.value, notes: notes.value.trim() || null,
         purchaseAmount: project.value.cost_tracking_enabled ? purchaseAmount.value : null,
+        estimatedAmount: project.value.cost_tracking_enabled ? estimatedAmount.value : null,
         attributedAmount: project.value.cost_tracking_enabled ? attributedAmount.value : null,
         currencyCode: project.value.currency_code
       }))
@@ -106,6 +111,8 @@ async function submit() {
       const { data: item, error: itemError } = await supabase.from('items').insert({
         owner_user_id: userData.user.id, created_by_user_id: userData.user.id,
         name: name.value.trim(), brand: brand.value.trim() || null, notes: notes.value.trim() || null,
+        estimated_amount: project.value.cost_tracking_enabled ? estimatedAmount.value : null,
+        estimated_currency_code: project.value.cost_tracking_enabled && estimatedAmount.value != null ? project.value.currency_code : null,
         purchase_amount: project.value.cost_tracking_enabled ? purchaseAmount.value : null,
         purchase_currency_code: project.value.cost_tracking_enabled && purchaseAmount.value !== null ? project.value.currency_code : null
       }).select('*').single()
@@ -156,6 +163,7 @@ onMounted(loadMaterials)
         <label class="field"><span>Bench note</span><textarea v-model="notes" placeholder="Size, condition, source or the reason for choosing it…" /></label>
         <div v-if="project.cost_tracking_enabled" class="materials-ticket__split">
           <label class="field"><span>Purchase amount</span><input v-model.number="purchaseAmount" min="0" step="0.01" type="number" :placeholder="project.currency_code"></label>
+          <label class="field"><span>Estimated purchase</span><input v-model.number="estimatedAmount" min="0" step="0.01" type="number" :placeholder="project.currency_code"></label>
           <label class="field"><span>Attributed to build</span><input v-model.number="attributedAmount" min="0" step="0.01" type="number" :placeholder="project.currency_code"></label>
         </div>
         <button class="button" type="submit" :disabled="busy">{{ busy ? 'Writing line…' : '+ Add to parts counter' }}</button>
@@ -166,7 +174,10 @@ onMounted(loadMaterials)
         <article v-for="entry in projectItems" :key="entry.id">
           <div><strong>{{ entry.item.name }}</strong><small>{{ entry.item.brand || entry.item.notes || 'No extra note' }}</small></div>
           <span>{{ entry.role.replace('_', ' ') }}</span><span class="parts-ledger__stamp">{{ entry.status || 'unmarked' }}</span>
-          <strong v-if="project.cost_tracking_enabled">{{ entry.attributed_amount ?? entry.item.purchase_amount ?? '—' }} {{ project.currency_code }}</strong>
+          <div v-if="project.cost_tracking_enabled">
+            <strong>{{ entry.attributed_amount ?? '—' }} {{ project.currency_code }} allocated</strong>
+            <ItemAllocationEditor v-if="canEdit && ['subject', 'part', 'material', 'external_service'].includes(entry.role)" :entry="entry" :currency="project.currency_code" @saved="loadMaterials" />
+          </div>
         </article>
         <div v-if="!projectItems.length" class="materials-ledger-sheet__empty">The sheet is blank. Add the first thing waiting on the bench.</div>
       </div>

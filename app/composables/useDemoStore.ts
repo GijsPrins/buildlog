@@ -59,7 +59,7 @@ export interface DemoLogInput {
   findingDecisions: Array<{ finding: string; decision: string }>
   imageRole: ImageRole
   images: Array<{ name: string; type: string; size: number; dataUrl: string; role?: ImageRole; caption?: string | null }>
-  itemUsage: Array<{ projectItemId: string; usageAmount: number | null; note: string | null; statusAfter?: ProjectItemStatus | null }>
+  itemUsage: Array<{ projectItemId: string; usageAmount: number | null; usageCost?: number | null; note: string | null; statusAfter?: ProjectItemStatus | null }>
 }
 
 export interface DemoLogUpdateInput {
@@ -85,6 +85,7 @@ export interface DemoProjectItemInput {
   role: ProjectItemRole
   status: ProjectItemStatus | null
   notes: string | null
+  estimatedAmount?: number | null
   purchaseAmount: number | null
   attributedAmount: number | null
   currencyCode: string
@@ -371,7 +372,7 @@ export function useDemoStore() {
     const item: Item = {
       id: crypto.randomUUID(), owner_user_id: accounts.current.value!.id, name: input.name, brand: input.brand,
       purchase_amount: input.purchaseAmount, purchase_currency_code: input.purchaseAmount === null ? null : input.currencyCode,
-      estimated_amount: null, estimated_currency_code: null, supplier: null, url: null, notes: input.notes,
+      estimated_amount: input.estimatedAmount ?? null, estimated_currency_code: input.estimatedAmount == null ? null : input.currencyCode, supplier: null, url: null, notes: input.notes,
       created_by_user_id: accounts.current.value!.id, created_at: now, updated_at: now
     }
     const projectItem: ProjectItem = {
@@ -384,6 +385,15 @@ export function useDemoStore() {
     database.value.projectItems.push(projectItem)
     persist()
     return { ...projectItem, item }
+  }
+
+  function setItemAllocation(projectId: string, entryId: string, amount: number | null) {
+    accounts.requireRole(projectId)
+    const entry = database.value.projectItems.find(item => item.id === entryId && item.project_id === projectId)
+    if (!entry) throw new Error('Item unavailable.')
+    if (amount !== null && (!Number.isFinite(amount) || amount < 0)) throw new Error('Invalid allocation.')
+    entry.attributed_amount = amount
+    persist()
   }
 
   function createProject(input: DemoProjectInput) {
@@ -484,7 +494,7 @@ export function useDemoStore() {
     database.value.logItemUsage ??= []
     database.value.logItemUsage.push(...input.itemUsage.map(usage => ({
       id: crypto.randomUUID(), project_id: input.projectId, log_id: id,
-      project_item_id: usage.projectItemId, usage_amount: usage.usageAmount,
+      project_item_id: usage.projectItemId, usage_amount: usage.usageAmount, usage_cost: usage.usageCost ?? null,
       note: usage.note, created_at: now, updated_at: now
     })))
     for (const usage of input.itemUsage) {
@@ -528,7 +538,7 @@ export function useDemoStore() {
     database.value.logItemUsage = (database.value.logItemUsage ?? []).filter(entry => entry.log_id !== log.id)
     database.value.logItemUsage.push(...input.itemUsage.map(usage => ({
       id: crypto.randomUUID(), project_id: log.project_id, log_id: log.id,
-      project_item_id: usage.projectItemId, usage_amount: usage.usageAmount,
+      project_item_id: usage.projectItemId, usage_amount: usage.usageAmount, usage_cost: usage.usageCost ?? null,
       note: usage.note, created_at: now, updated_at: now
     })))
     for (const usage of input.itemUsage) {
@@ -562,5 +572,5 @@ export function useDemoStore() {
     persist()
   }
 
-  return { deleteLocalAccount, initialize, listProjects, getProject, getLog, listProjectItems, listProjectLogUsage, createProject, updateProject, addProjectItem, addLog, updateLog, reset }
+  return { deleteLocalAccount, initialize, listProjects, getProject, getLog, listProjectItems, listProjectLogUsage, createProject, updateProject, setItemAllocation, addProjectItem, addLog, updateLog, reset }
 }

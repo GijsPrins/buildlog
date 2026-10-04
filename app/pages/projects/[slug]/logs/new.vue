@@ -14,6 +14,7 @@ const phases = ref<ProjectPhase[]>([])
 const projectItems = ref<ProjectItemDetail[]>([])
 const selectedItems = ref<Record<string, boolean>>({})
 const itemAmounts = ref<Record<string, number | null>>({})
+const itemCosts = ref<Record<string, number | null>>({})
 const itemNotes = ref<Record<string, string>>({})
 const itemStatuses = ref<Record<string, ProjectItemStatus | ''>>({})
 const title = ref('')
@@ -139,7 +140,7 @@ async function saveDemoLog() {
     imageRole: 'gallery',
     images: demoImages,
     itemUsage: projectItems.value.filter(entry => selectedItems.value[entry.id]).map(entry => ({
-      projectItemId: entry.id, usageAmount: itemAmounts.value[entry.id] ?? null,
+      projectItemId: entry.id, usageAmount: optionalAmount(itemAmounts.value[entry.id]), usageCost: project.value?.cost_tracking_enabled ? optionalAmount(itemCosts.value[entry.id]) : null,
       note: itemNotes.value[entry.id]?.trim() || null, statusAfter: itemStatuses.value[entry.id] || null
     }))
   })
@@ -257,7 +258,7 @@ async function submit() {
   try {
     const usageRows = projectItems.value.filter(entry => selectedItems.value[entry.id]).map(entry => ({
       project_id: project.value!.id, log_id: log.id, project_item_id: entry.id,
-      usage_amount: itemAmounts.value[entry.id] ?? null, note: itemNotes.value[entry.id]?.trim() || null
+      usage_amount: optionalAmount(itemAmounts.value[entry.id]), usage_cost: project.value?.cost_tracking_enabled ? optionalAmount(itemCosts.value[entry.id]) : null, note: itemNotes.value[entry.id]?.trim() || null
     }))
     if (usageRows.length) {
       const { error: usageError } = await supabase.from('log_item_usage').insert(usageRows)
@@ -290,7 +291,7 @@ onBeforeRouteLeave(() => {
     title: title.value, phaseId: phaseId.value, workDate: workDate.value,
     durationHours: durationHours.value, durationMinutes: durationMinutes.value,
     summary: summary.value, content: content.value, finding: finding.value, decision: decision.value,
-    selectedItems: { ...selectedItems.value }, itemAmounts: { ...itemAmounts.value },
+    selectedItems: { ...selectedItems.value }, itemAmounts: { ...itemAmounts.value }, itemCosts: { ...itemCosts.value },
     itemNotes: { ...itemNotes.value }, itemStatuses: { ...itemStatuses.value },
     photos: photos.value.map(({ file, caption, role }) => ({ file, caption, role }))
   })
@@ -306,7 +307,7 @@ onMounted(async () => {
   title.value = draft.title; phaseId.value = draft.phaseId; workDate.value = draft.workDate
   durationHours.value = draft.durationHours; durationMinutes.value = draft.durationMinutes
   summary.value = draft.summary; content.value = draft.content; finding.value = draft.finding; decision.value = draft.decision
-  selectedItems.value = draft.selectedItems; itemAmounts.value = draft.itemAmounts
+  selectedItems.value = draft.selectedItems; itemAmounts.value = draft.itemAmounts; itemCosts.value = draft.itemCosts ?? {}
   itemNotes.value = draft.itemNotes; itemStatuses.value = draft.itemStatuses
   photos.value = draft.photos.map(photo => ({ ...photo, preview: URL.createObjectURL(photo.file) }))
 })
@@ -379,6 +380,7 @@ onMounted(async () => {
             <label class="session-parts__check"><input v-model="selectedItems[entry.id]" type="checkbox"><span><strong>{{ entry.item.name }}</strong><small>{{ entry.item.brand || entry.role.replace('_', ' ') }} · {{ entry.status || 'unmarked' }}</small></span></label>
             <div v-if="selectedItems[entry.id]" class="session-parts__detail session-parts__detail--status">
               <label><span>Qty / amount</span><input v-model.number="itemAmounts[entry.id]" min="0" step="0.01" type="number" placeholder="1"></label>
+              <label v-if="project?.cost_tracking_enabled"><span>Usage cost ({{ project.currency_code }})</span><input v-model.number="itemCosts[entry.id]" min="0" step="0.01" type="number" placeholder="Not recorded"></label>
               <label><span>Note</span><input v-model="itemNotes[entry.id]" placeholder="Installed, tested, partly used…"></label>
               <label><span>After this session</span><select v-model="itemStatuses[entry.id]"><option value="">Keep {{ entry.status || 'status' }}</option><option value="installed">Installed</option><option value="used">Used</option><option value="removed">Removed</option></select></label>
             </div>

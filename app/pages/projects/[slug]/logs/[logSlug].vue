@@ -27,6 +27,7 @@ const finding = ref('')
 const decision = ref('')
 const selectedItems = ref<Record<string, boolean>>({})
 const itemAmounts = ref<Record<string, number | null>>({})
+const itemCosts = ref<Record<string, number | null>>({})
 const itemNotes = ref<Record<string, string>>({})
 const itemStatuses = ref<Record<string, ProjectItemStatus | ''>>({})
 const removedImageIds = ref<string[]>([])
@@ -54,10 +55,11 @@ function fillForm() {
   durationMinutes.value = log.value.duration_minutes ? log.value.duration_minutes % 60 : null
   summary.value = log.value.summary; content.value = log.value.content
   finding.value = log.value.finding_decisions?.[0]?.finding || ''; decision.value = log.value.finding_decisions?.[0]?.decision || ''
-  selectedItems.value = {}; itemAmounts.value = {}; itemNotes.value = {}; itemStatuses.value = {}
+  selectedItems.value = {}; itemAmounts.value = {}; itemCosts.value = {}; itemNotes.value = {}; itemStatuses.value = {}
   for (const entry of usage.value) {
     selectedItems.value[entry.project_item_id] = true
     itemAmounts.value[entry.project_item_id] = entry.usage_amount
+    itemCosts.value[entry.project_item_id] = entry.usage_cost ?? null
     itemNotes.value[entry.project_item_id] = entry.note || ''
   }
   removedImageIds.value = []
@@ -118,7 +120,7 @@ function fileAsDataUrl(file: File) { return new Promise<string>((resolve, reject
 
 function usageInput() {
   return projectItems.value.filter(entry => selectedItems.value[entry.id]).map(entry => ({
-    projectItemId: entry.id, usageAmount: itemAmounts.value[entry.id] ?? null,
+    projectItemId: entry.id, usageAmount: optionalAmount(itemAmounts.value[entry.id]), usageCost: optionalAmount(itemCosts.value[entry.id]),
     note: itemNotes.value[entry.id]?.trim() || null, statusAfter: itemStatuses.value[entry.id] || null
   }))
 }
@@ -163,7 +165,7 @@ async function save() {
       if (deleteUsageError) throw deleteUsageError
       const rows = usageInput()
       if (rows.length) {
-        const { error } = await supabase.from('log_item_usage').insert(rows.map(entry => ({ project_id: project.value!.id, log_id: log.value!.id, project_item_id: entry.projectItemId, usage_amount: entry.usageAmount, note: entry.note })))
+        const { error } = await supabase.from('log_item_usage').insert(rows.map(entry => ({ project_id: project.value!.id, log_id: log.value!.id, project_item_id: entry.projectItemId, usage_amount: entry.usageAmount, usage_cost: entry.usageCost, note: entry.note })))
         if (error) throw error
       }
       for (const entry of rows.filter(entry => entry.statusAfter)) {
@@ -219,7 +221,7 @@ watch(() => route.query.edit, value => { editing.value = value === '1'; if (edit
         <label class="field field--full"><span>Workshop notes</span><textarea v-model="content" /></label>
         <label class="field"><span>Finding</span><textarea v-model="finding" /></label><label class="field"><span>Decision</span><textarea v-model="decision" /></label>
       </div>
-      <section v-if="project.items_enabled" class="log-edit__parts"><h2>Parts used</h2><article v-for="entry in projectItems" :key="entry.id" :class="{ 'is-selected': selectedItems[entry.id] }"><label><input v-model="selectedItems[entry.id]" type="checkbox"><strong>{{ entry.item.name }}</strong><small>{{ entry.status || 'unmarked' }}</small></label><div v-if="selectedItems[entry.id]"><input v-model.number="itemAmounts[entry.id]" min="0" step="0.01" type="number" placeholder="Qty"><input v-model="itemNotes[entry.id]" placeholder="Usage note"><select v-model="itemStatuses[entry.id]"><option value="">Keep status</option><option value="installed">Installed</option><option value="used">Used</option><option value="removed">Removed</option></select></div></article></section>
+      <section v-if="project.items_enabled" class="log-edit__parts"><h2>Parts used</h2><article v-for="entry in projectItems" :key="entry.id" :class="{ 'is-selected': selectedItems[entry.id] }"><label><input v-model="selectedItems[entry.id]" type="checkbox"><strong>{{ entry.item.name }}</strong><small>{{ entry.status || 'unmarked' }}</small></label><div v-if="selectedItems[entry.id]"><input v-model.number="itemAmounts[entry.id]" min="0" step="0.01" type="number" placeholder="Qty"><label v-if="project.cost_tracking_enabled">Usage cost ({{ project.currency_code }})<input v-model.number="itemCosts[entry.id]" min="0" step="0.01" type="number" placeholder="Not recorded"></label><input v-model="itemNotes[entry.id]" placeholder="Usage note"><select v-model="itemStatuses[entry.id]"><option value="">Keep status</option><option value="installed">Installed</option><option value="used">Used</option><option value="removed">Removed</option></select></div></article></section>
       <section class="log-photo-section">
         <h2>Workshop photos</h2>
         <div class="log-photo-list">
