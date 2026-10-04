@@ -1,3 +1,5 @@
+import type { WorkshopComment, WorkshopApproval } from '~/utils/workshopSocial'
+import { normalizeComment } from '../utils/workshopSocial'
 import type { ImageRole, ProjectSpec, Item, LogItemUsage, LogItemUsageDetail, Project, ProjectImage, ProjectItem, ProjectItemDetail, ProjectItemRole, ProjectItemStatus, ProjectLog, ProjectPhase, ProjectSummary, ThemeConfig } from '~/types/domain'
 
 import { normalizeSpecification } from '../utils/specifications'
@@ -5,6 +7,8 @@ import { normalizeSpecification } from '../utils/specifications'
 const STORAGE_KEY = 'buildlog-demo-v5'
 
 interface DemoDatabase {
+  comments?: WorkshopComment[]
+  approvals?: WorkshopApproval[]
   specifications?: ProjectSpec[]
   projects: Project[]
   phases: ProjectPhase[]
@@ -235,6 +239,7 @@ export function createDemoDatabase(): DemoDatabase {
   }]
 
   return {
+    comments: [], approvals: [],
     projects: [
       {
         id: giosProjectId,
@@ -312,6 +317,8 @@ export function useDemoStore() {
         project.is_completed = /^(done|complete|completed)$/i.test(phase?.name ?? '')
       }
     }
+    database.value.comments ??= []
+    database.value.approvals ??= []
     database.value.items ??= []
     database.value.projectItems ??= []
     database.value.logItemUsage ??= []
@@ -608,6 +615,8 @@ export function useDemoStore() {
     const log = database.value.logs.find(entry => entry.id === logId)
     if (!log) throw new Error('Log unavailable.')
     accounts.requireRole(log.project_id)
+    database.value.comments = (database.value.comments ?? []).filter(entry => entry.log_id !== logId)
+    database.value.approvals = (database.value.approvals ?? []).filter(entry => entry.log_id !== logId)
     database.value.logs = database.value.logs.filter(entry => entry.id !== logId)
     database.value.logItemUsage = database.value.logItemUsage.filter(entry => entry.log_id !== logId)
     for (const image of database.value.images) if (image.log_id === logId) image.log_id = null
@@ -664,6 +673,8 @@ export function useDemoStore() {
     const userId = accounts.current.value?.id
     const ownedIds = accounts.deleteAccount(transfers, deleteProjects)
     const deleted = new Set(deleteProjects ? ownedIds : [])
+    database.value.comments = (database.value.comments ?? []).filter(entry => !deleted.has(entry.project_id)).map(entry => entry.author_user_id === userId ? { ...entry, author_user_id: null, author_display_name: 'Former builder' } : entry)
+    database.value.approvals = (database.value.approvals ?? []).filter(entry => !deleted.has(entry.project_id) && entry.user_id !== userId)
     database.value.specifications = (database.value.specifications ?? []).filter(entry => !deleted.has(entry.project_id))
     database.value.projects = database.value.projects.filter(project => !deleted.has(project.id))
     database.value.phases = database.value.phases.filter(phase => !deleted.has(phase.project_id))
@@ -676,5 +687,48 @@ export function useDemoStore() {
     persist()
   }
 
-  return { createOwnedItem, workshopItems, deleteLog, listSpecifications, saveSpecification, deleteSpecification, ownedItems, linkOwnedItem, editLedgerEntry, editOwnedItem, deleteLocalAccount, initialize, listProjects, getProject, getLog, listProjectItems, listProjectLogUsage, createProject, updateProject, updateProjectTheme, setItemAllocation, addProjectItem, addLog, updateLog, reset }
+  function socialTarget(projectId: string, logId: string | null, write = false) {
+    initialize()
+    const project = database.value.projects.find(entry => entry.id === projectId)
+    if (!project || (!project.is_public && !accounts.role(projectId))) throw new Error('Workshop discussion unavailable.')
+    if (logId && !database.value.logs.some(log => log.id === logId && log.project_id === projectId)) throw new Error('Workshop session unavailable.')
+    if (write && !accounts.current.value) throw new Error('Sign in to join the bench.')
+  }
+  function socialEntries(projectId: string, logId: string | null) {
+    socialTarget(projectId, logId)
+    return {
+      comments: (database.value.comments ?? []).filter(entry => entry.project_id === projectId && entry.log_id === logId).sort((a,b) => b.created_at.localeCompare(a.created_at) || b.id.localeCompare(a.id)),
+      approvals: (database.value.approvals ?? []).filter(entry => entry.project_id === projectId && entry.log_id === logId)
+    }
+  }
+  function setApproval(projectId: string, logId: string | null, approved: boolean) {
+    socialTarget(projectId, logId, true)
+    const userId = accounts.current.value!.id
+    const entries = socialEntries(projectId, logId).approvals
+    if (approved && !entries.some(entry => entry.user_id === userId)) database.value.approvals!.push({ id: crypto.randomUUID(), project_id: projectId, log_id: logId, user_id: userId })
+    if (!approved) database.value.approvals = database.value.approvals!.filter(entry => !(entry.project_id === projectId && entry.log_id === logId && entry.user_id === userId))
+    persist()
+  }
+  function saveComment(projectId: string, logId: string | null, content: string, id?: string) {
+    socialTarget(projectId, logId, true)
+    const text = normalizeComment(content), account = accounts.current.value!
+    if (id) {
+      const entry = socialEntries(projectId, logId).comments.find(entry => entry.id === id)
+      if (!entry || entry.author_user_id !== account.id) throw new Error('Only the writer can edit this note.')
+      entry.content = text; entry.updated_at = new Date().toISOString()
+    } else {
+      const now = new Date().toISOString()
+      database.value.comments!.push({ id: crypto.randomUUID(), project_id: projectId, log_id: logId, author_user_id: account.id, author_display_name: account.name, content: text, created_at: now, updated_at: now })
+    }
+    persist()
+  }
+  function removeComment(projectId: string, logId: string | null, id: string) {
+    socialTarget(projectId, logId, true)
+    const entry = socialEntries(projectId, logId).comments.find(entry => entry.id === id)
+    if (!entry || (entry.author_user_id !== accounts.current.value!.id && accounts.role(projectId) !== 'owner')) throw new Error('You cannot remove this note.')
+    database.value.comments = database.value.comments!.filter(entry => entry.id !== id)
+    persist()
+  }
+
+  return { socialEntries, setApproval, saveComment, removeComment, createOwnedItem, workshopItems, deleteLog, listSpecifications, saveSpecification, deleteSpecification, ownedItems, linkOwnedItem, editLedgerEntry, editOwnedItem, deleteLocalAccount, initialize, listProjects, getProject, getLog, listProjectItems, listProjectLogUsage, createProject, updateProject, updateProjectTheme, setItemAllocation, addProjectItem, addLog, updateLog, reset }
 }

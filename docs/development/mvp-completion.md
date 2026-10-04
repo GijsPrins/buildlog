@@ -1,6 +1,6 @@
 # MVP completion — v0.4
 
-Updated 4 October 2026. Social features remain outside this work.
+Updated 4 October 2026. MVP work is complete. The subsequent social delivery is documented in [workshop-social.md](workshop-social.md).
 
 ## Compact working context
 
@@ -8,7 +8,7 @@ Repository: `GijsPrins/buildlog`, branch `main`, Nuxt 4 + Supabase, deployed by 
 
 Completed through `bf0039b`: auth/recovery, additive photos with captions/roles, in-tab log drafts, independent quantities/usage costs, project finances, item ownership/edit/reuse, specifications, ownership transfer, log deletion preserving originals, multiple findings and log authorship, explicit completion/reopening, template snapshots, project Theme Workshop and a deduplicated workshop purchase overview.
 
-Current delivery completed: mobile/accessibility and the end-to-end live workflow audit. All listed MVP deliveries are checked; social features are the next separate product scope. Purchases now supports independent owned items, shared items from enabled member ledgers, one purchase per item, per-currency actual/planned totals, tool subsets and full purchase/estimate editing. Existing RLS stays unchanged. Social features remain outside MVP.
+Current delivery: project/log workshop notes and approval stamps, requested after MVP completion. Mobile/accessibility and the live MVP workflow audit passed; all listed MVP deliveries are checked. See workshop-social.md for the social access model and validation. Purchases now supports independent owned items, shared items from enabled member ledgers, one purchase per item, per-currency actual/planned totals, tool subsets and full purchase/estimate editing. Existing RLS stays unchanged. Social features remain outside MVP.
 
 Validation: 52 tests, typecheck, static Pages generation, isolated browser against the static build, rollback-only live DB permission checks. Purchases delivery passed 9 live checks. Dev HMR can become stale when generated imports change; use the static build for browser verification. Push verified changes to main as already authorized. Never use real user data in destructive tests.
 

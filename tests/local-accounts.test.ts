@@ -17,6 +17,39 @@ beforeEach(() => {
 })
 
 describe('local workshop accounts', () => {
+  it('keeps social access separate from editing and handles moderation and deletion', async () => {
+    const accounts = useLocalAccounts(); await accounts.initialize()
+    const demo = useDemoStore(); demo.initialize()
+    demo.saveComment('demo-gios', null, 'Owner note')
+    await accounts.register('Bench reader', 'bench-reader@example.test', 'Workshop2026!')
+    const readerId = accounts.current.value!.id
+    await accounts.signIn('builder@buildlog.local', 'Workshop2026!')
+    accounts.addMember('demo-gios', 'bench-reader@example.test', 'reader')
+    await accounts.signIn('bench-reader@example.test', 'Workshop2026!')
+    const ownerNote = demo.socialEntries('demo-gios', null).comments[0]!
+    expect(accounts.canWrite('demo-gios')).toBe(false)
+    expect(() => demo.saveComment('demo-gios', null, 'Changed', ownerNote.id)).toThrow('writer')
+    expect(() => demo.removeComment('demo-gios', null, ownerNote.id)).toThrow('cannot remove')
+    demo.saveComment('demo-gios', 'gios-log-1', 'A reader question')
+    demo.setApproval('demo-gios', null, true); demo.setApproval('demo-gios', null, true)
+    demo.setApproval('demo-gios', 'gios-log-1', true)
+    expect(demo.socialEntries('demo-gios', null).approvals).toHaveLength(1)
+    expect(demo.socialEntries('demo-gios', 'gios-log-1').approvals).toHaveLength(1)
+    demo.setApproval('demo-gios', null, false)
+    expect(demo.socialEntries('demo-gios', null).approvals).toHaveLength(0)
+    expect(() => demo.saveComment('demo-gios', 'peugeot-log-1', 'Wrong project')).toThrow('unavailable')
+    demo.deleteLocalAccount({}, false)
+    await accounts.signIn('builder@buildlog.local', 'Workshop2026!')
+    const retained = demo.socialEntries('demo-gios', 'gios-log-1').comments[0]!
+    expect(retained.author_user_id).toBeNull()
+    expect(retained.author_display_name).toBe('Former builder')
+    expect(demo.socialEntries('demo-gios', 'gios-log-1').approvals.some(entry => entry.user_id === readerId)).toBe(false)
+    demo.removeComment('demo-gios', 'gios-log-1', retained.id)
+    expect(demo.socialEntries('demo-gios', 'gios-log-1').comments).toHaveLength(0)
+    demo.saveComment('demo-gios', 'gios-log-1', 'Log-only note'); demo.deleteLog('gios-log-1')
+    expect(demo.socialEntries('demo-gios', null).comments).toHaveLength(1)
+    expect(() => demo.socialEntries('demo-gios', 'gios-log-1')).toThrow('unavailable')
+  })
   it('records purchases independently, reuses them in builds and preserves ownership', async () => {
     const accounts = useLocalAccounts(); await accounts.initialize()
     const demo = useDemoStore(); demo.initialize()

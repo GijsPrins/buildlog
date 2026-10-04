@@ -217,6 +217,7 @@ watch(() => route.query.edit, value => { editing.value = value === '1'; if (edit
       <section class="log-sheet__notes"><p class="eyebrow">Workshop notes</p><p>{{ log.content || 'No extended notes were recorded.' }}</p></section>
       <section v-if="usage.length" class="log-sheet__issued"><header><p class="eyebrow">Issued from stores</p><h2>Parts on this work order</h2></header><article v-for="entry in usage" :key="entry.id"><div><strong>{{ entry.projectItem.item.name }}</strong><small>{{ entry.projectItem.item.brand || entry.projectItem.role.replace('_', ' ') }}</small></div><span>{{ entry.usage_amount ?? '—' }}</span><p>{{ entry.note || 'Used during this session.' }}</p><b>{{ entry.projectItem.status || 'unmarked' }}</b></article></section>
       <section v-if="log.finding_decisions?.length" class="log-sheet__decisions"><article v-for="(entry, index) in log.finding_decisions" :key="index"><div><span>Finding</span><p>{{ entry.finding }}</p></div><div><span>Decision</span><p>{{ entry.decision }}</p></div></article></section>
+      <WorkshopSocial id="workshop-notes" :project-id="project.id" :log-id="log.id" />
     </template>
 
     <form v-else class="log-edit" @submit.prevent="save">

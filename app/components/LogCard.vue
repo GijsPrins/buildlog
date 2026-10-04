@@ -50,6 +50,7 @@ defineProps<{
       </div>
     </div>
 
+    <WorkshopSocial v-if="projectSlug" :project-id="log.project_id" :log-id="log.id" compact :discussion-to="`/projects/${projectSlug}/logs/${log.slug}#workshop-notes`" />
     <footer v-if="itemUsages?.length || projectSlug" class="log-card__footer">
       <div v-if="itemUsages?.length" class="log-card__parts"><span>Issued from stores</span><strong v-for="usage in itemUsages" :key="usage.id">{{ usage.projectItem.item.name }}<small v-if="usage.usage_amount"> × {{ usage.usage_amount }}</small></strong></div>
       <NuxtLink v-if="projectSlug" :to="`/projects/${projectSlug}/logs/${log.slug}`">Open work order →</NuxtLink>

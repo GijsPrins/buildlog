@@ -179,6 +179,7 @@ onMounted(loadProject)
             <NuxtLink v-if="isOwner" class="button button--ghost" :to="`/projects/${project.slug}/theme`">Theme Workshop</NuxtLink>
             <NuxtLink v-if="isOwner" class="button button--ghost project-work-order__edit" :to="`/projects/${project.slug}/edit`">Edit project</NuxtLink>
             <a class="project-work-order__jump" href="#build-log">View workshop sessions ↓</a>
+            <a class="project-work-order__jump" href="#project-workshop-notes">Join the bench ↓</a>
           </div>
           <CopyProjectTheme v-if="!isOwner" :key="project.id" :theme="project.theme_config" :project-name="project.name" />
         </div>
@@ -300,5 +301,6 @@ onMounted(loadProject)
         <NuxtLink v-if="canEdit" class="button" :to="`/projects/${project.slug}/logs/new`">Add the first log</NuxtLink>
       </div>
     </section>
+    <WorkshopSocial id="project-workshop-notes" :project-id="project.id" />
   </div>
 </template>

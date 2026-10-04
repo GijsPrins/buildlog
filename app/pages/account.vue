@@ -59,7 +59,7 @@ async function removeAccount() {
     <p v-if="demoMode" class="muted">Local demo accounts live in this browser. Use a demo password, not a password from another service.</p>
     <p v-else class="muted">Your workshop is stored in Supabase and accessible on your other devices.</p>
     <form class="form-card" @submit.prevent="removeAccount">
-      <h2>Delete account</h2><p>Your account and project memberships will be removed. Logs you contributed to other projects remain without your account attribution.</p>
+      <h2>Delete account</h2><p>Your account and project memberships will be removed. Logs and workshop notes you contributed to other projects remain without your account attribution. Your approval stamps are removed.</p>
       <label class="builder-toggle"><input v-model="deleteProjects" type="checkbox"><span><strong>Also delete my owned projects</strong><small>Permanently removes their logs, photos and project materials, including work by other contributors.</small></span></label>
       <template v-if="!deleteProjects && owned.length">
         <p>Keep your projects by handing each one to another registered account.</p>
