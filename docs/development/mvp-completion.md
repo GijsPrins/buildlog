@@ -17,7 +17,9 @@ The live migration is additive. Database verification uses temporary fixture acc
 
 ## Remaining deliveries
 
-- [ ] Full item editing, unlinking with history protection, existing-item selection and reuse across projects.
+- [x] Shared-item editing by the item owner; project role/status/note/allocation editing by contributors and owners.
+- [x] Existing owned-item selection and reuse across projects without duplicating purchases.
+- [x] Removal via an explicit `removed` status, preserving ledger links and log history. Permanent unlink/delete is not exposed.
 - [ ] Workshop-wide deduplicated expenditure, currency-grouped totals and full estimate editing.
 - [ ] Project specifications dossier and Bicycle Restoration suggested fields.
 - [ ] Ordinary ownership-transfer UI and log deletion.

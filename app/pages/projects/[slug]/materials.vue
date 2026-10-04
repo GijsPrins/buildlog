@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Project, ProjectItemDetail, ProjectItemRole, ProjectItemStatus, ProjectMembership } from '~/types/domain'
+import type { Item, Project, ProjectItemDetail, ProjectItemRole, ProjectItemStatus, ProjectMembership } from '~/types/domain'
 
 definePageMeta({ middleware: 'auth' })
 
@@ -21,6 +21,23 @@ const attributedAmount = ref<number | null>(null)
 const estimatedAmount = ref<number | null>(null)
 const demoMode = useDemoMode()
 const demo = useDemoStore()
+const userId = ref('')
+const ownedItems = ref<Item[]>([])
+const existingItemId = ref('')
+const availableItems = computed(() => ownedItems.value.filter(item => !projectItems.value.some(entry => entry.item_id === item.id)))
+async function linkExisting() {
+  if (!project.value || !canEdit.value || !existingItemId.value) return
+  busy.value = true; errorMessage.value = ''
+  try {
+    if (demoMode.value) demo.linkOwnedItem(project.value.id, existingItemId.value, role.value, status.value)
+    else {
+      const { error } = await useSupabase()!.from('project_items').insert({ project_id: project.value.id, item_id: existingItemId.value, role: role.value, status: status.value }).select('id').single()
+      if (error) throw error
+    }
+    existingItemId.value = ''; await loadMaterials()
+  } catch (cause) { errorMessage.value = cause instanceof Error ? cause.message : 'Could not link item.' }
+  finally { busy.value = false }
+}
 
 const roleOptions: Array<{ value: ProjectItemRole; label: string }> = [
   { value: 'subject', label: 'Build subject' }, { value: 'part', label: 'Part' },
@@ -39,9 +56,12 @@ const projectStyle = computed(() => ({
 }))
 
 async function loadMaterials() {
+  errorMessage.value = ''
   if (demoMode.value) {
     await useLocalAccounts().initialize()
     demo.initialize()
+    userId.value = useLocalAccounts().current.value?.id || ''
+    ownedItems.value = demo.ownedItems()
     const data = demo.getProject(slug.value)
     if (!data) errorMessage.value = 'Project not found in this browser.'
     else {
@@ -65,6 +85,10 @@ async function loadMaterials() {
     loading.value = false
     return
   }
+  userId.value = userData.user.id
+  const { data: owned, error: ownedError } = await supabase.from('items').select('*').eq('owner_user_id', userData.user.id).order('name')
+  if (ownedError) { errorMessage.value = ownedError.message; loading.value = false; return }
+  ownedItems.value = (owned ?? []) as Item[]
   project.value = projectData as Project
   if (!project.value.items_enabled) {
     errorMessage.value = 'The parts ledger is not enabled for this project.'
@@ -128,6 +152,7 @@ async function submit() {
       projectItems.value.push({ ...link, item } as ProjectItemDetail)
     }
     clearForm()
+    await loadMaterials()
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : 'The part could not be added.'
   } finally {
@@ -151,6 +176,15 @@ onMounted(loadMaterials)
       <div><strong>{{ projectItems.length }}</strong><span>items logged</span><small>{{ project.cost_tracking_enabled ? `Costs tracked in ${project.currency_code}` : 'Costs deliberately hidden' }}</small></div>
     </header>
 
+    <form v-if="canEdit" class="form-card" @submit.prevent="linkExisting">
+      <h2>Use an item you already own</h2>
+      <p>Link the same item to this build without recording another purchase. Its role and status below apply only to this project. Shared details become visible to people who can view this project.</p>
+      <label class="field">Existing item<select v-model="existingItemId" required><option value="">Choose an item</option><option v-for="item in availableItems" :key="item.id" :value="item.id">{{ item.name }}{{ item.brand ? ` — ${item.brand}` : '' }}</option></select></label>
+      <label class="field">Role on this project<select v-model="role"><option v-for="option in roleOptions" :key="option.value" :value="option.value">{{ option.label }}</option></select></label>
+      <label class="field">Status on this project<select v-model="status"><option v-for="option in statusOptions" :key="option" :value="option">{{ option }}</option></select></label>
+      <p v-if="!availableItems.length">All your existing items are already linked here. Create a new item below.</p>
+      <button class="button" :disabled="busy || !existingItemId">Add existing item</button>
+    </form>
     <section class="materials-workbench">
       <form v-if="canEdit" class="materials-ticket" @submit.prevent="submit">
         <div class="materials-ticket__title"><span>New line item</span><strong># {{ String(projectItems.length + 1).padStart(3, '0') }}</strong></div>
@@ -172,12 +206,13 @@ onMounted(loadMaterials)
       <div class="materials-ledger-sheet">
         <div class="materials-ledger-sheet__head"><span>Item / note</span><span>Role</span><span>Status</span><span v-if="project.cost_tracking_enabled">Cost</span></div>
         <article v-for="entry in projectItems" :key="entry.id">
-          <div><strong>{{ entry.item.name }}</strong><small>{{ entry.item.brand || entry.item.notes || 'No extra note' }}</small></div>
+          <div><strong>{{ entry.item.name }}</strong><small>{{ entry.item.brand || entry.item.notes || 'No extra note' }}</small><p v-if="entry.notes">{{ entry.notes }}</p></div>
           <span>{{ entry.role.replace('_', ' ') }}</span><span class="parts-ledger__stamp">{{ entry.status || 'unmarked' }}</span>
           <div v-if="project.cost_tracking_enabled">
             <strong>{{ entry.attributed_amount ?? '—' }} {{ project.currency_code }} allocated</strong>
-            <ItemAllocationEditor v-if="canEdit && ['subject', 'part', 'material', 'external_service'].includes(entry.role)" :entry="entry" :currency="project.currency_code" @saved="loadMaterials" />
+
           </div>
+          <div v-if="canEdit" class="ledger-edit-row"><LedgerItemEditor :entry="entry" :currency="project.currency_code" :costs="project.cost_tracking_enabled" :user-id="userId" @saved="loadMaterials" /></div>
         </article>
         <div v-if="!projectItems.length" class="materials-ledger-sheet__empty">The sheet is blank. Add the first thing waiting on the bench.</div>
       </div>
@@ -185,3 +220,7 @@ onMounted(loadMaterials)
     <p v-if="errorMessage" class="form-error">{{ errorMessage }}</p>
   </div>
 </template>
+
+<style scoped>
+.ledger-edit-row { grid-column: 1 / -1; min-width: 0; }
+</style>

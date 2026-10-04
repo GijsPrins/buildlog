@@ -387,6 +387,37 @@ export function useDemoStore() {
     return { ...projectItem, item }
   }
 
+  function ownedItems() {
+    return database.value.items.filter(item => item.owner_user_id === accounts.current.value?.id)
+  }
+
+  function linkOwnedItem(projectId: string, itemId: string, role: ProjectItemRole, status: ProjectItemStatus) {
+    accounts.requireRole(projectId)
+    const item = ownedItems().find(item => item.id === itemId)
+    if (!item) throw new Error('Choose an item you own.')
+    if (database.value.projectItems.some(entry => entry.project_id === projectId && entry.item_id === itemId)) throw new Error('This item is already on the ledger.')
+    if (role === 'subject' && status !== 'removed' && database.value.projectItems.some(entry => entry.project_id === projectId && entry.role === 'subject' && entry.status !== 'removed')) throw new Error('This project already has a subject.')
+    const now = new Date().toISOString()
+    database.value.projectItems.push({ id: crypto.randomUUID(), project_id: projectId, item_id: itemId, role, status, notes: null, attributed_amount: null, created_at: now, updated_at: now })
+    persist()
+  }
+
+  function editLedgerEntry(projectId: string, entryId: string, changes: Pick<ProjectItem, 'role' | 'status' | 'notes' | 'attributed_amount'>) {
+    accounts.requireRole(projectId)
+    const entry = database.value.projectItems.find(item => item.id === entryId && item.project_id === projectId)
+    if (!entry) throw new Error('Item unavailable.')
+    if (changes.role === 'subject' && changes.status !== 'removed' && database.value.projectItems.some(other => other.id !== entryId && other.project_id === projectId && other.role === 'subject' && other.status !== 'removed')) throw new Error('This project already has a subject.')
+    Object.assign(entry, changes, { updated_at: new Date().toISOString() })
+    persist()
+  }
+
+  function editOwnedItem(itemId: string, changes: Pick<Item, 'name' | 'brand' | 'notes' | 'supplier' | 'url' | 'purchase_amount' | 'purchase_currency_code' | 'estimated_amount' | 'estimated_currency_code'>) {
+    const item = ownedItems().find(item => item.id === itemId)
+    if (!item) throw new Error('Only the item owner can edit shared details.')
+    Object.assign(item, changes, { updated_at: new Date().toISOString() })
+    persist()
+  }
+
   function setItemAllocation(projectId: string, entryId: string, amount: number | null) {
     accounts.requireRole(projectId)
     const entry = database.value.projectItems.find(item => item.id === entryId && item.project_id === projectId)
@@ -572,5 +603,5 @@ export function useDemoStore() {
     persist()
   }
 
-  return { deleteLocalAccount, initialize, listProjects, getProject, getLog, listProjectItems, listProjectLogUsage, createProject, updateProject, setItemAllocation, addProjectItem, addLog, updateLog, reset }
+  return { ownedItems, linkOwnedItem, editLedgerEntry, editOwnedItem, deleteLocalAccount, initialize, listProjects, getProject, getLog, listProjectItems, listProjectLogUsage, createProject, updateProject, setItemAllocation, addProjectItem, addLog, updateLog, reset }
 }

@@ -17,6 +17,26 @@ beforeEach(() => {
 })
 
 describe('local workshop accounts', () => {
+  it('reuses owned items, edits shared details and keeps removed entries and history', async () => {
+    const accounts = useLocalAccounts(); await accounts.initialize()
+    const demo = useDemoStore(); demo.initialize()
+    const projects = demo.listProjects()
+    const first = projects[0]!, second = projects[1]!
+    const item = demo.addProjectItem({ projectId: first.id, name: 'Shared wrench', brand: null, role: 'tool', status: 'available', notes: null, purchaseAmount: 20, attributedAmount: null, currencyCode: 'EUR' })
+    demo.linkOwnedItem(second.id, item.item.id, 'tool', 'planned')
+    expect(() => demo.linkOwnedItem(second.id, item.item.id, 'tool', 'planned')).toThrow('already')
+    demo.editOwnedItem(item.item.id, { name: 'Updated wrench', brand: 'Workshop', notes: 'Shared', supplier: null, url: null, purchase_amount: 25, purchase_currency_code: 'EUR', estimated_amount: null, estimated_currency_code: null })
+    const linked = demo.listProjectItems(second.id).find(entry => entry.item_id === item.item.id)!
+    expect(linked.item.name).toBe('Updated wrench')
+    expect(demo.listProjectItems(first.id).find(entry => entry.id === item.id)?.item.purchase_amount).toBe(25)
+    demo.editLedgerEntry(second.id, linked.id, { role: 'tool', status: 'removed', notes: 'Returned to shelf', attributed_amount: null })
+    expect(demo.listProjectItems(second.id).find(entry => entry.id === linked.id)?.status).toBe('removed')
+    expect(demo.listProjectItems(first.id).find(entry => entry.id === item.id)?.status).toBe('available')
+    expect(demo.ownedItems().filter(entry => entry.id === item.item.id)).toHaveLength(1)
+    await accounts.register('Another', 'other-item-owner@example.test', 'Workshop2026!')
+    expect(() => demo.editOwnedItem(item.item.id, { ...item.item })).toThrow('owner')
+    expect(() => demo.editLedgerEntry(first.id, item.id, { role: 'tool', status: 'removed', notes: null, attributed_amount: null })).toThrow('permission')
+  })
   it('persists individual photo captions and roles when creating and editing a log', async () => {
     const accounts = useLocalAccounts(); await accounts.initialize()
     const demo = useDemoStore(); demo.initialize()
