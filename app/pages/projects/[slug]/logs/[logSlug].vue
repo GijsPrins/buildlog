@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { collectPages } from '~/utils/workshopFinancials'
+import { checkedData, saveWorkshopLog } from '~/utils/workshopSaves'
 import type { ImageRole, LogItemUsageDetail, Project, ProjectImage, ProjectItemDetail, ProjectItemStatus, ProjectLog, ProjectMembership, ProjectPhase } from '~/types/domain'
 
 const route = useRoute()
@@ -77,7 +79,7 @@ function fillForm() {
 }
 
 async function loadDetail() {
-  loading.value = true; errorMessage.value = ''
+  loading.value = true; errorMessage.value = ''; canEdit.value = false
   if (demoMode.value) {
     await useLocalAccounts().initialize()
     demo.initialize()
@@ -93,35 +95,36 @@ async function loadDetail() {
     return
   }
 
-  const supabase = useSupabase()
-  if (!supabase) return
-  const [{ data: projectData, error: projectError }, { data: userData }] = await Promise.all([
-    supabase.from('projects').select('*').eq('slug', slug.value).maybeSingle(), supabase.auth.getUser()
-  ])
-  if (projectError || !projectData) { errorMessage.value = projectError?.message || 'Project unavailable.'; loading.value = false; return }
-  project.value = projectData as Project
-  const { data: logData, error: logError } = await supabase.from('logs').select('*').eq('project_id', project.value.id).eq('slug', logSlug.value).maybeSingle()
-  if (logError || !logData) { errorMessage.value = logError?.message || 'Workshop session not found.'; loading.value = false; return }
-  log.value = logData as ProjectLog
-  await loadAuthors([log.value])
-  const requests = await Promise.all([
-    supabase.from('project_phases').select('*').eq('project_id', project.value.id).is('archived_at', null).order('sort_order'),
-    supabase.from('project_images').select('*').eq('log_id', log.value.id).eq('upload_status', 'ready').is('deleted_at', null).order('sort_order'),
-    project.value.items_enabled ? supabase.from('project_items').select('*,item:items(*)').eq('project_id', project.value.id).order('role') : Promise.resolve({ data: [] }),
-    project.value.items_enabled ? supabase.from('log_item_usage').select('*,projectItem:project_items(*,item:items(*))').eq('log_id', log.value.id) : Promise.resolve({ data: [] }),
-    userData.user ? supabase.from('project_members').select('project_id,user_id,role').eq('project_id', project.value.id).eq('user_id', userData.user.id).maybeSingle() : Promise.resolve({ data: null })
-  ])
-  phases.value = (requests[0].data ?? []) as ProjectPhase[]
-  const baseImages = (requests[1].data ?? []) as ProjectImage[]
-  images.value = await Promise.all(baseImages.map(async image => {
-    const { data } = await supabase.storage.from('project-originals').createSignedUrl(image.storage_path, 3600)
-    return { ...image, signedUrl: data?.signedUrl }
-  }))
-  projectItems.value = (requests[2].data ?? []) as ProjectItemDetail[]
-  usage.value = (requests[3].data ?? []) as LogItemUsageDetail[]
-  const membership = requests[4].data as ProjectMembership | null
-  canEdit.value = membership?.role === 'owner' || membership?.role === 'contributor'
-  fillForm(); loading.value = false
+  try {
+    const supabase = useSupabase()!
+    const [{ data: projectData, error: projectError }, { data: userData, error: authError }] = await Promise.all([
+      supabase.from('projects').select('*').eq('slug', slug.value).maybeSingle(), supabase.auth.getUser()
+    ])
+    if (projectError || !projectData) throw new Error(projectError?.message || 'Project unavailable.')
+    if (authError && authError.name !== 'AuthSessionMissingError') throw new Error(authError.message)
+    const logData = checkedData(await supabase.from('logs').select('*').eq('project_id', projectData.id).eq('slug', logSlug.value).maybeSingle()) as ProjectLog | null
+    if (!logData) throw new Error('Workshop session not found.')
+    const [phaseData, baseImages, itemData, usageData, memberResult] = await Promise.all([
+      collectPages<ProjectPhase>((from, to) => supabase.from('project_phases').select('*', { count: 'exact' }).eq('project_id', projectData.id).order('sort_order').order('id').range(from, to)),
+      collectPages<ProjectImage>((from, to) => supabase.from('project_images').select('*', { count: 'exact' }).eq('log_id', logData.id).eq('upload_status', 'ready').is('deleted_at', null).order('sort_order').order('id').range(from, to)),
+      projectData.items_enabled ? collectPages<ProjectItemDetail>((from, to) => supabase.from('project_items').select('*,item:items(*)', { count: 'exact' }).eq('project_id', projectData.id).order('id').range(from, to)) : Promise.resolve([]),
+      projectData.items_enabled ? collectPages<LogItemUsageDetail>((from, to) => supabase.from('log_item_usage').select('*,projectItem:project_items(*,item:items(*))', { count: 'exact' }).eq('log_id', logData.id).order('id').range(from, to)) : Promise.resolve([]),
+      userData.user ? supabase.from('project_members').select('project_id,user_id,role').eq('project_id', projectData.id).eq('user_id', userData.user.id).maybeSingle() : Promise.resolve({ data: null, error: null })
+    ])
+    const member = checkedData(memberResult) as ProjectMembership | null
+    const signedImages = await Promise.all(baseImages.map(async image => {
+      const signed = checkedData(await supabase.storage.from('project-originals').createSignedUrl(image.storage_path, 3600))
+      if (!signed?.signedUrl) throw new Error('Could not load the original photo.')
+      return { ...image, signedUrl: signed.signedUrl }
+    }))
+    project.value = projectData as Project; log.value = logData; phases.value = phaseData; images.value = signedImages
+    projectItems.value = itemData; usage.value = usageData
+    await loadAuthors([logData])
+    fillForm(); canEdit.value = member?.role === 'owner' || member?.role === 'contributor'
+    if (!canEdit.value) editing.value = false
+  } catch (cause) { canEdit.value = false; log.value = null; errorMessage.value = cause instanceof Error ? cause.message : 'Could not load the complete session. Please retry.' }
+  finally { loading.value = false }
+
 }
 
 function toggleRemoveImage(imageId: string) {
@@ -136,24 +139,9 @@ function usageInput() {
   }))
 }
 
-async function uploadNewImages(userId: string) {
-  const supabase = useSupabase()!
-  for (const [index, file] of files.value.entries()) {
-    const { data: reservation, error } = await supabase.from('project_images').insert({
-      project_id: project.value!.id, log_id: log.value!.id, original_file_name: file.name,
-      media_type: file.type || 'image/jpeg', byte_size: file.size, role: photos.value[index]!.role, caption: photos.value[index]!.caption.trim() || null,
-      sort_order: images.value.length + index, upload_status: 'reserved', uploaded_by_user_id: userId
-    }).select('id,storage_path').single()
-    if (error || !reservation) throw error || new Error(`Could not reserve ${file.name}`)
-    const { error: uploadError } = await supabase.storage.from('project-originals').upload(reservation.storage_path, file, { contentType: file.type || 'image/jpeg' })
-    if (uploadError) throw uploadError
-    const { error: readyError } = await supabase.from('project_images').update({ upload_status: 'ready' }).eq('id', reservation.id)
-    if (readyError) throw readyError
-  }
-}
 
 async function save() {
-  if (!project.value || !log.value || !canEdit.value) return
+  if (busy.value || loading.value || !project.value || !log.value || !canEdit.value) return
   busy.value = true; errorMessage.value = ''
   const duration = Math.max(0, (durationHours.value ?? 0) * 60 + (durationMinutes.value ?? 0)) || null
   const findingDecisions = normalizeFindings(observations.value)
@@ -165,32 +153,15 @@ async function save() {
         durationMinutes: duration, summary: summary.value.trim(), content: content.value.trim(), findingDecisions,
         imageRole: 'gallery', imageEdits: imageEdits.value.map(image => ({ id: image.id, role: image.role, caption: image.caption?.trim() || null })), newImages, removedImageIds: removedImageIds.value, itemUsage: usageInput() })
     } else {
-      const supabase = useSupabase()!
-      const { data: userData } = await supabase.auth.getUser()
-      if (!userData.user) throw new Error('Your session expired.')
-      const { error: updateError } = await supabase.from('logs').update({ phase_id: phaseId.value || null, title: title.value.trim(), work_date: workDate.value,
-        duration_minutes: duration, summary: summary.value.trim(), content: content.value.trim(), finding_decisions: findingDecisions }).eq('id', log.value.id).eq('project_id', project.value.id)
-      if (updateError) throw updateError
-      const { error: deleteUsageError } = await supabase.from('log_item_usage').delete().eq('log_id', log.value.id).eq('project_id', project.value.id)
-      if (deleteUsageError) throw deleteUsageError
-      const rows = usageInput()
-      if (rows.length) {
-        const { error } = await supabase.from('log_item_usage').insert(rows.map(entry => ({ project_id: project.value!.id, log_id: log.value!.id, project_item_id: entry.projectItemId, usage_amount: entry.usageAmount, usage_cost: entry.usageCost, note: entry.note })))
-        if (error) throw error
-      }
-      for (const entry of rows.filter(entry => entry.statusAfter)) {
-        const { error } = await supabase.from('project_items').update({ status: entry.statusAfter }).eq('id', entry.projectItemId).eq('project_id', project.value.id)
-        if (error) throw error
-      }
-      if (removedImageIds.value.length) {
-        const { error } = await supabase.from('project_images').update({ deleted_at: new Date().toISOString() }).in('id', removedImageIds.value).eq('project_id', project.value.id)
-        if (error) throw error
-      }
-      for (const image of imageEdits.value.filter(image => !removedImageIds.value.includes(image.id))) {
-        const { error } = await supabase.from('project_images').update({ role: image.role, caption: image.caption?.trim() || null }).eq('id', image.id).eq('log_id', log.value.id).eq('project_id', project.value.id)
-        if (error) throw error
-      }
-      await uploadNewImages(userData.user.id)
+      await saveWorkshopLog(useSupabase()!, {
+        log: { id: log.value.id, create: false, project_id: project.value.id, phase_id: phaseId.value || null,
+          slug: log.value.slug, title: title.value.trim(), work_date: workDate.value, duration_minutes: duration,
+          summary: summary.value.trim(), content: content.value.trim(), finding_decisions: findingDecisions },
+        usage: project.value.items_enabled ? usageInput().map(entry => ({ project_item_id: entry.projectItemId,
+          usage_amount: entry.usageAmount, usage_cost: entry.usageCost, note: entry.note, status_after: entry.statusAfter })) : null,
+        imageEdits: imageEdits.value.map(image => ({ id: image.id, role: image.role, caption: image.caption?.trim() || null, removed: removedImageIds.value.includes(image.id) })),
+        photos: photos.value, sortOffset: images.value.length
+      })
     }
     editing.value = false; clearPhotos(); await navigateTo(`/projects/${slug.value}/logs/${logSlug.value}`, { replace: true }); await loadDetail()
   } catch (error) { errorMessage.value = error instanceof Error ? error.message : 'The work order could not be updated.' }
@@ -198,13 +169,13 @@ async function save() {
 }
 
 onMounted(loadDetail)
-watch(() => route.query.edit, value => { editing.value = value === '1'; if (editing.value) fillForm() })
+watch(() => route.query.edit, value => { editing.value = value === '1' && canEdit.value; if (editing.value) fillForm() })
 
 </script>
 
 <template>
   <p v-if="loading" class="loading">Pulling the work order from the drawer…</p>
-  <div v-else-if="errorMessage && !log" class="empty-state"><h2>Work order unavailable</h2><p>{{ errorMessage }}</p><NuxtLink class="button" :to="`/projects/${slug}`">Back to the project</NuxtLink></div>
+  <div v-else-if="errorMessage && !log" class="empty-state"><h2>Work order unavailable</h2><p>{{ errorMessage }}</p><button type="button" class="button" @click="loadDetail">Try again</button><NuxtLink class="button" :to="`/projects/${slug}`">Back to the project</NuxtLink></div>
   <div v-else-if="project && log" class="log-sheet" :style="projectStyle">
     <div class="log-sheet__bar"><NuxtLink :to="`/projects/${slug}`">← {{ project.name }}</NuxtLink><strong>FORM WL-{{ log.id.slice(-4).toUpperCase() }}</strong><span>{{ editing ? 'Correction copy' : 'Workshop archive' }}</span></div>
 
@@ -220,7 +191,7 @@ watch(() => route.query.edit, value => { editing.value = value === '1'; if (edit
       <WorkshopSocial id="workshop-notes" :project-id="project.id" :log-id="log.id" />
     </template>
 
-    <form v-else class="log-edit" @submit.prevent="save">
+    <form v-else-if="canEdit" class="log-edit" @submit.prevent="save">
       <header><p class="eyebrow">Correct the workshop record</p><h1>Edit work order</h1><p>Keep the useful history accurate without turning it into paperwork.</p></header>
       <div class="log-edit__grid">
         <label class="field field--full"><span>Title</span><input v-model="title" required></label>

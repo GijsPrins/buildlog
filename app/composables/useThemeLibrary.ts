@@ -1,5 +1,6 @@
 import type { ThemeConfig } from '~/types/domain'
 import { copyTheme } from '../utils/projectEditor'
+import { collectPages } from '../utils/workshopFinancials'
 import { validateTheme } from '../utils/themes'
 
 export interface SavedTheme { id: string; name: string; config: ThemeConfig }
@@ -16,9 +17,7 @@ export function useThemeLibrary() {
       const saved = localStorage.getItem(key())
       themes.value = saved ? JSON.parse(saved) : []
     } else {
-      const { data, error } = await useSupabase()!.from('user_themes').select('id,name,config').order('name')
-      if (error) throw new Error(error.message)
-      themes.value = data || []
+      themes.value = await collectPages<SavedTheme>((from, to) => useSupabase()!.from('user_themes').select('id,name,config', { count: 'exact' }).order('name').order('id').range(from, to))
     }
   }
   async function save(id: string | null, name: string, config: ThemeConfig) {

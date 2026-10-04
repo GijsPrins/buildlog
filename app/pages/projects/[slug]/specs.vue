@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { collectPages } from '~/utils/workshopFinancials'
 import type { Project, ProjectSpec } from '~/types/domain'
 const route = useRoute()
 const slug = computed(() => String(route.params.slug))
@@ -34,6 +35,7 @@ function suggest() {
   if (suggestion.value !== '' && selected) { form.section = selected.section; form.label = selected.label }
 }
 async function load() {
+  canEdit.value = false
   try {
     await useAuth().initialize()
     if (demoMode.value) {
@@ -54,11 +56,10 @@ async function load() {
         if (memberError) throw memberError
         canEdit.value = member?.role === 'owner' || member?.role === 'contributor'
       }
-      const { data: rows, error: specError } = await client.from('project_specs').select('*').eq('project_id', data.id).order('sort_order')
-      if (specError) throw specError
+      const rows = await collectPages<ProjectSpec>((from, to) => client.from('project_specs').select('*', { count: 'exact' }).eq('project_id', data.id).order('sort_order').order('id').range(from, to))
       specs.value = rows as ProjectSpec[]
     }
-  } catch (cause) { error.value = cause instanceof Error ? cause.message : 'Could not load specifications.' }
+  } catch (cause) { canEdit.value = false; error.value = cause instanceof Error ? cause.message : 'Could not load specifications.' }
   finally { loading.value = false }
 }
 async function save() {

@@ -123,6 +123,7 @@ function archivePhase(phase: ProjectEditorPhase) {
       <div class="project-editor__settings"><label class="builder-toggle"><input v-model="isPublic" type="checkbox"><span><strong>Public project</strong><small>Anyone with the address can read the project.</small></span></label><label class="builder-toggle"><input v-model="itemsEnabled" type="checkbox"><span><strong>Parts &amp; materials</strong><small>Show the BOM and connect parts to work orders.</small></span></label><label class="builder-toggle" :class="{ disabled: !itemsEnabled }"><input v-model="costsEnabled" type="checkbox" :disabled="!itemsEnabled"><span><strong>Track costs</strong><small>Optional amounts appear only while enabled.</small></span></label><label class="field"><span>Currency</span><input v-model="currencyCode" maxlength="3" pattern="[A-Za-z]{3}"></label></div>
     </section>
 
+    <p v-if="mode === 'edit'" class="muted">The project currency can only change before allocations or consumable usage costs have been recorded.</p>
     <ProjectMembers v-if="projectId" :project-id="projectId" />
     <section v-else class="project-editor__section project-editor__collaboration">
       <header class="builder-section-heading"><span>05</span><div><p class="eyebrow">People around the bench</p><h2>Collaboration</h2></div><p>Roles belong to the project, not to the paperwork.</p></header>

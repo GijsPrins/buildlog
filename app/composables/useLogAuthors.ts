@@ -1,3 +1,4 @@
+import { collectPages, collectInBatches } from '../utils/workshopFinancials'
 import type { ProjectLog } from '~/types/domain'
 
 export function useLogAuthors() {
@@ -10,8 +11,8 @@ export function useLogAuthors() {
       const accounts = useLocalAccounts().state.value.accounts
       names.value = Object.fromEntries(accounts.filter(account => ids.includes(account.id)).map(account => [account.id, account.name]))
     } else {
-      const { data, error } = await useSupabase()!.from('profiles').select('id,display_name').in('id', ids)
-      if (!error) names.value = Object.fromEntries((data ?? []).map(profile => [profile.id, profile.display_name]))
+      const profiles = await collectInBatches<{ id: string; display_name: string }>(ids, subset => collectPages((from, to) => useSupabase()!.from('profiles').select('id,display_name', { count: 'exact' }).in('id', subset).order('id').range(from, to)))
+      names.value = Object.fromEntries(profiles.map(profile => [profile.id, profile.display_name]))
     }
   }
   function authorName(log: ProjectLog) {

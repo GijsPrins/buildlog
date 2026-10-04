@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { collectPages } from '~/utils/workshopFinancials'
+import { checkedData } from '~/utils/workshopSaves'
 import type {
   Project,
   ProjectImage,
@@ -64,91 +66,91 @@ const hasStory = computed(() => storyChapters.value.some(chapter => chapter.text
 const projectStyle = computed(() => projectThemeStyle(project.value?.theme_config))
 
 async function loadProject() {
-  if (demoMode.value) {
-    await useLocalAccounts().initialize()
-    demo.initialize()
-    const data = demo.getProject(slug.value)
-    if (!data) {
-      errorMessage.value = 'Project not found in this browser.'
+  loading.value = true; errorMessage.value = ''; membership.value = null
+  try {
+    if (demoMode.value) {
+      await useLocalAccounts().initialize()
+      demo.initialize()
+      const data = demo.getProject(slug.value)
+      if (!data) {
+        errorMessage.value = 'Project not found in this browser.'
+        loading.value = false
+        return
+      }
+      project.value = data.project
+      phases.value = data.phases
+      logs.value = data.logs
+      await loadAuthors(data.logs)
+      images.value = data.images
+      projectItems.value = data.projectItems
+      logItemUsage.value = data.logItemUsage
+      const local = useLocalAccounts()
+      const role = local.role(data.project.id)
+      membership.value = role && local.current.value ? { project_id: data.project.id, user_id: local.current.value.id, role } : null
       loading.value = false
       return
     }
-    project.value = data.project
-    phases.value = data.phases
-    logs.value = data.logs
-    await loadAuthors(data.logs)
-    images.value = data.images
-    projectItems.value = data.projectItems
-    logItemUsage.value = data.logItemUsage
-    const local = useLocalAccounts()
-    const role = local.role(data.project.id)
-    membership.value = role && local.current.value ? { project_id: data.project.id, user_id: local.current.value.id, role } : null
-    loading.value = false
-    return
-  }
 
-  const supabase = useSupabase()
-  if (!supabase) {
-    errorMessage.value = 'Supabase is not configured.'
-    loading.value = false
-    return
-  }
+    const supabase = useSupabase()
+    if (!supabase) {
+      errorMessage.value = 'Supabase is not configured.'
+      loading.value = false
+      return
+    }
 
-  loading.value = true
-  const { data: projectData, error } = await supabase
-    .from('projects')
-    .select('*')
-    .eq('slug', slug.value)
-    .maybeSingle()
-
-  if (error || !projectData) {
-    errorMessage.value = error?.message || 'Project not found or not available to you.'
-    loading.value = false
-    return
-  }
-
-  project.value = projectData as Project
-
-  const [{ data: phaseData }, { data: logData }, { data: imageData }, authResult] = await Promise.all([
-    supabase.from('project_phases').select('*').eq('project_id', project.value.id).is('archived_at', null).order('sort_order'),
-    supabase.from('logs').select('*').eq('project_id', project.value.id).order('work_date', { ascending: false }).order('created_at', { ascending: false }),
-    supabase.from('project_images').select('*').eq('project_id', project.value.id).eq('upload_status', 'ready').is('deleted_at', null).order('sort_order'),
-    supabase.auth.getUser()
-  ])
-
-  phases.value = (phaseData ?? []) as ProjectPhase[]
-  logs.value = (logData ?? []) as ProjectLog[]
-  await loadAuthors(logs.value)
-  const baseImages = (imageData ?? []) as ProjectImage[]
-
-  images.value = await Promise.all(baseImages.map(async image => {
-    const { data } = await supabase.storage
-      .from('project-originals')
-      .createSignedUrl(image.storage_path, 3600)
-    return { ...image, signedUrl: data?.signedUrl }
-  }))
-
-  if (authResult.data.user) {
-    const { data: membershipData } = await supabase
-      .from('project_members')
-      .select('project_id,user_id,role')
-      .eq('project_id', project.value.id)
-      .eq('user_id', authResult.data.user.id)
+    loading.value = true
+    const { data: projectData, error } = await supabase
+      .from('projects')
+      .select('*')
+      .eq('slug', slug.value)
       .maybeSingle()
-    membership.value = membershipData as ProjectMembership | null
-  }
 
-  if (project.value.items_enabled) {
-    const [{ data: itemData, error: itemError }, { data: usageData }] = await Promise.all([
-      supabase.from('project_items').select('*,item:items(*)').eq('project_id', project.value.id).order('role'),
-      supabase.from('log_item_usage').select('*,projectItem:project_items(*,item:items(*))').eq('project_id', project.value.id)
+    if (error || !projectData) {
+      errorMessage.value = error?.message || 'Project not found or not available to you.'
+      loading.value = false
+      return
+    }
+
+    project.value = projectData as Project
+
+    const [phaseData, logData, baseImages, authResult] = await Promise.all([
+      collectPages<ProjectPhase>((from, to) => supabase.from('project_phases').select('*', { count: 'exact' }).eq('project_id', project.value!.id).order('sort_order').order('id').range(from, to)),
+      collectPages<ProjectLog>((from, to) => supabase.from('logs').select('*', { count: 'exact' }).eq('project_id', project.value!.id).order('work_date', { ascending: false }).order('created_at', { ascending: false }).order('id').range(from, to)),
+      collectPages<ProjectImage>((from, to) => supabase.from('project_images').select('*', { count: 'exact' }).eq('project_id', project.value!.id).eq('upload_status', 'ready').is('deleted_at', null).order('sort_order').order('id').range(from, to)),
+      supabase.auth.getUser()
     ])
-    if (itemError) errorMessage.value = itemError.message
-    projectItems.value = (itemData ?? []) as ProjectItemDetail[]
-    logItemUsage.value = (usageData ?? []) as LogItemUsageDetail[]
-  }
+    if (authResult.error && authResult.error.name !== 'AuthSessionMissingError') throw new Error(authResult.error.message)
+    phases.value = phaseData; logs.value = logData
+    await loadAuthors(logData)
+    images.value = await Promise.all(baseImages.map(async image => {
+      const result = await supabase.storage
+        .from('project-originals')
+        .createSignedUrl(image.storage_path, 3600)
+      const signed = checkedData(result)
+      if (!signed?.signedUrl) throw new Error('Could not load the original photo.')
+      return { ...image, signedUrl: signed.signedUrl }
+    }))
 
-  loading.value = false
+    if (authResult.data.user) {
+      const memberResult = await supabase
+        .from('project_members')
+        .select('project_id,user_id,role')
+        .eq('project_id', project.value.id)
+        .eq('user_id', authResult.data.user.id)
+        .maybeSingle()
+      membership.value = checkedData(memberResult) as ProjectMembership | null
+    }
+
+    if (project.value.items_enabled) {
+      const [itemData, usageData] = await Promise.all([
+        collectPages<ProjectItemDetail>((from, to) => supabase.from('project_items').select('*,item:items(*)', { count: 'exact' }).eq('project_id', project.value!.id).order('id').range(from, to)),
+        collectPages<LogItemUsageDetail>((from, to) => supabase.from('log_item_usage').select('*,projectItem:project_items(*,item:items(*))', { count: 'exact' }).eq('project_id', project.value!.id).order('id').range(from, to))
+      ])
+      projectItems.value = itemData; logItemUsage.value = usageData
+    }
+
+  } catch (cause) { project.value = null; errorMessage.value = cause instanceof Error ? cause.message : 'Could not load the complete project.' }
+  finally { loading.value = false }
 }
 
 onMounted(loadProject)
@@ -159,6 +161,7 @@ onMounted(loadProject)
   <div v-else-if="errorMessage" class="empty-state">
     <h2>Project unavailable</h2>
     <p>{{ errorMessage }}</p>
+    <button type="button" class="button" @click="loadProject">Try again</button>
     <NuxtLink class="button" to="/">Back to projects</NuxtLink>
   </div>
   <div v-else-if="project" class="project-workshop" :class="[`project-texture--${project.theme_config.decoration?.texture || 'none'}`, `project-frame--${project.theme_config.decoration?.imageFrame || 'none'}`]" :style="projectStyle">

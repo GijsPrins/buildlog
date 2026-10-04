@@ -1,6 +1,7 @@
 import type { ImageRole, ProjectItemStatus } from '~/types/domain'
 
 export interface LogDraft {
+  logId?: string; logSlug?: string
   title: string; phaseId: string; workDate: string
   durationHours: number | null; durationMinutes: number | null
   summary: string; content: string; finding: string; decision: string
@@ -10,7 +11,7 @@ export interface LogDraft {
   itemAmounts: Record<string, number | null>
   itemNotes: Record<string, string>
   itemStatuses: Record<string, ProjectItemStatus | ''>
-  photos: Array<{ file: File; caption: string; role: ImageRole }>
+  photos: Array<{ id?: string; file: File; caption: string; role: ImageRole }>
 }
 
 // Files stay in memory, scoped to one Nuxt app and account; never in SSR payloads.

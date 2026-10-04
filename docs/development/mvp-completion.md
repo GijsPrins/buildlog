@@ -84,3 +84,10 @@ A separate live Supabase browser/API test used three temporary confirmed fixture
 Fixtures were created directly for testing, so registration email delivery and recovery email delivery were not exercised here. Earlier auth/recovery implementation remains in place. Previous deliveries separately verified themes, financial calculations, ownership transfer and log deletion through isolated browsers and rollback database checks.
 
 The deployed delete-account Edge Function removed all three fixture accounts and their project/photo content after each run, including failed test-selector attempts. Final database verification found zero fixture accounts, projects or items and zero orphan original objects. No production user content was modified. No schema migration was needed.
+
+
+## Review stabilization
+
+All six findings from the [4 October review](code-review-2026-10-04.md#resolution--4-october-2026) are resolved. Migration `20261004190454_atomic_workshop_saves` is applied: relational log/usage/photo metadata saves and project/phase saves are transactional, retries reuse stable IDs, and recorded allocations/usage lock the project currency. Original uploads remain resumable and unchanged. Required editor reads fail closed, preserve drafts for retry, and paginate complete snapshots; timelines and financial aggregation no longer stop at the API row cap.
+
+70 application tests, typecheck, Pages generation, 21 rollback database checks and isolated demo/live browser checks passed. Live failure injection verified upload retry without duplicate logs, read failure blocking and preservation of old usage after a rejected correction. Fixture accounts/projects/originals were removed; zero fixtures and orphan originals remained. The review report records detailed coverage and remaining verification limits.

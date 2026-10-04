@@ -40,6 +40,7 @@ export interface DemoProjectInput {
 }
 
 export interface DemoProjectUpdateInput {
+  currencyCode?: string
   isCompleted: boolean
   projectId: string
   name: string
@@ -534,8 +535,11 @@ export function useDemoStore() {
     if (database.value.projects.some(entry => entry.id !== input.projectId && entry.slug === input.slug)) {
       throw new Error('That workshop address is already in use.')
     }
+    const nextCurrency = input.currencyCode || project.currency_code
+    if (nextCurrency !== project.currency_code && (database.value.projectItems.some(entry => entry.project_id === project.id && entry.attributed_amount != null) || database.value.logItemUsage.some(entry => entry.project_id === project.id && entry.usage_cost != null))) throw new Error('The project currency cannot change after allocations or usage costs have been recorded.')
     const now = new Date().toISOString()
     Object.assign(project, {
+      currency_code: nextCurrency,
       name: input.name, slug: input.slug, subtitle: input.subtitle, description: input.description,
       started_story: input.startedStory, motivation_story: input.motivationStory, object_story: input.objectStory,
       is_completed: input.isCompleted, is_public: input.isPublic, items_enabled: input.itemsEnabled,
@@ -653,6 +657,7 @@ export function useDemoStore() {
       caption: image.caption?.trim() || null, sort_order: database.value.images.filter(entry => entry.log_id === log.id).length + index,
       upload_status: 'ready', uploaded_by_user_id: accounts.current.value!.id, deleted_at: null, created_at: now
     })))
+    if (database.value.projects.find(entry => entry.id === log.project_id)?.items_enabled) {
     database.value.logItemUsage = (database.value.logItemUsage ?? []).filter(entry => entry.log_id !== log.id)
     database.value.logItemUsage.push(...input.itemUsage.map(usage => ({
       id: crypto.randomUUID(), project_id: log.project_id, log_id: log.id,
@@ -663,6 +668,7 @@ export function useDemoStore() {
       if (!usage.statusAfter) continue
       const projectItem = database.value.projectItems.find(entry => entry.id === usage.projectItemId)
       if (projectItem) { projectItem.status = usage.statusAfter; projectItem.updated_at = now }
+    }
     }
     const project = database.value.projects.find(entry => entry.id === log.project_id)
     if (project) { project.updated_at = now; if (input.phaseId) project.current_phase_id = input.phaseId }

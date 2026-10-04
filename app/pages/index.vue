@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { collectPages, collectInBatches } from '~/utils/workshopFinancials'
 import type { Project, ProjectImage, ProjectLog, ProjectPhase, ProjectSummary } from '~/types/domain'
 
 const configured = useSupabaseConfigured()
@@ -44,74 +45,69 @@ async function startQuickLog() {
   await navigateTo(`/projects/${quickProjectSlug.value}/logs/new`)
 }
 
+let generation = 0
 async function loadProjects() {
-  if (demoMode.value) {
-    demo.initialize()
-    projects.value = demo.listProjects()
-    loading.value = false
-    return
-  }
-
-  const supabase = useSupabase()
-  if (!supabase) {
-    loading.value = false
-    return
-  }
-
-  loading.value = true
-  errorMessage.value = ''
-
-  const { data, error } = await supabase.from('projects').select('*').order('updated_at', { ascending: false })
-  if (error) {
-    errorMessage.value = error.message
-    loading.value = false
-    return
-  }
-
-  const baseProjects = (data ?? []) as Project[]
-  writableProjectIds.value = []
-  if (user.value) {
-    const { data: memberships } = await supabase.from('project_members').select('project_id').eq('user_id', user.value.id).in('role', ['owner', 'contributor'])
-    writableProjectIds.value = (memberships || []).map(entry => entry.project_id)
-  }
-  if (!baseProjects.length) {
-    projects.value = []
-    loading.value = false
-    return
-  }
-
-  const projectIds = baseProjects.map(project => project.id)
-  const phaseIds = baseProjects.flatMap(project => project.current_phase_id ? [project.current_phase_id] : [])
-  const heroImageIds = baseProjects.flatMap(project => project.hero_image_id ? [project.hero_image_id] : [])
-  const [{ data: logData }, { data: phaseData }, { data: imageData }] = await Promise.all([
-    supabase.from('logs').select('project_id,duration_minutes').in('project_id', projectIds),
-    phaseIds.length ? supabase.from('project_phases').select('id,name').in('id', phaseIds) : Promise.resolve({ data: [] }),
-    heroImageIds.length
-      ? supabase.from('project_images').select('id,storage_path').in('id', heroImageIds).eq('upload_status', 'ready')
-      : Promise.resolve({ data: [] })
-  ])
-
-  const logs = (logData ?? []) as Pick<ProjectLog, 'project_id' | 'duration_minutes'>[]
-  const phases = (phaseData ?? []) as Pick<ProjectPhase, 'id' | 'name'>[]
-  const heroImages = (imageData ?? []) as Pick<ProjectImage, 'id' | 'storage_path'>[]
-  const signedHeroes = new Map<string, string>()
-
-  await Promise.all(heroImages.map(async image => {
-    const { data: signed } = await supabase.storage.from('project-originals').createSignedUrl(image.storage_path, 3600)
-    if (signed?.signedUrl) signedHeroes.set(image.id, signed.signedUrl)
-  }))
-
-  projects.value = baseProjects.map(project => {
-    const projectLogs = logs.filter(log => log.project_id === project.id)
-    return {
-      ...project,
-      currentPhase: phases.find(phase => phase.id === project.current_phase_id)?.name ?? null,
-      logCount: projectLogs.length,
-      totalMinutes: projectLogs.reduce((total, log) => total + (log.duration_minutes ?? 0), 0),
-      heroImageUrl: project.hero_image_id ? signedHeroes.get(project.hero_image_id) ?? null : null
+  const request = ++generation
+  const userId = user.value?.id
+  try {
+    if (demoMode.value) {
+      demo.initialize()
+      projects.value = demo.listProjects()
+      loading.value = false
+      return
     }
-  })
-  loading.value = false
+
+    const supabase = useSupabase()
+    if (!supabase) {
+      loading.value = false
+      return
+    }
+
+    loading.value = true
+    errorMessage.value = ''
+
+    const baseProjects = await collectPages<Project>((from, to) => supabase.from('projects').select('*', { count: 'exact' }).order('updated_at', { ascending: false }).order('id').range(from, to))
+    let writableIds: string[] = []
+    if (userId) {
+      const memberships = await collectPages<{ project_id: string }>((from, to) => supabase.from('project_members').select('project_id', { count: 'exact' }).eq('user_id', userId).in('role', ['owner', 'contributor']).order('project_id').range(from, to))
+      writableIds = memberships.map(entry => entry.project_id)
+    }
+    if (request !== generation) return
+    if (!baseProjects.length) {
+      projects.value = []
+      loading.value = false
+      return
+    }
+
+    const projectIds = baseProjects.map(project => project.id)
+    const phaseIds = baseProjects.flatMap(project => project.current_phase_id ? [project.current_phase_id] : [])
+    const heroImageIds = baseProjects.flatMap(project => project.hero_image_id ? [project.hero_image_id] : [])
+    const [logs, phases, heroImages] = await Promise.all([
+      collectInBatches<Pick<ProjectLog, 'project_id' | 'duration_minutes'>>(projectIds, ids => collectPages((from, to) => supabase.from('logs').select('project_id,duration_minutes', { count: 'exact' }).in('project_id', ids).order('id').range(from, to))),
+      collectInBatches<Pick<ProjectPhase, 'id' | 'name'>>(phaseIds, ids => collectPages((from, to) => supabase.from('project_phases').select('id,name', { count: 'exact' }).in('id', ids).order('id').range(from, to))),
+      collectInBatches<Pick<ProjectImage, 'id' | 'storage_path'>>(heroImageIds, ids => collectPages((from, to) => supabase.from('project_images').select('id,storage_path', { count: 'exact' }).in('id', ids).eq('upload_status', 'ready').is('deleted_at', null).order('id').range(from, to)))
+    ])
+    const signedHeroes = new Map<string, string>()
+
+    await Promise.all(heroImages.map(async image => {
+      const { data: signed } = await supabase.storage.from('project-originals').createSignedUrl(image.storage_path, 3600)
+      if (signed?.signedUrl) signedHeroes.set(image.id, signed.signedUrl)
+    }))
+
+    if (request !== generation) return
+    writableProjectIds.value = writableIds
+    projects.value = baseProjects.map(project => {
+      const projectLogs = logs.filter(log => log.project_id === project.id)
+      return {
+        ...project,
+        currentPhase: phases.find(phase => phase.id === project.current_phase_id)?.name ?? null,
+        logCount: projectLogs.length,
+        totalMinutes: projectLogs.reduce((total, log) => total + (log.duration_minutes ?? 0), 0),
+        heroImageUrl: project.hero_image_id ? signedHeroes.get(project.hero_image_id) ?? null : null
+      }
+    })
+  } catch (cause) { if (request === generation) { projects.value = []; errorMessage.value = cause instanceof Error ? cause.message : 'Could not load all projects.' } }
+  finally { if (request === generation) loading.value = false }
 }
 
 onMounted(async () => {

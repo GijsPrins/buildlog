@@ -17,6 +17,22 @@ beforeEach(() => {
 })
 
 describe('local workshop accounts', () => {
+  it('allows an unused currency change but locks recorded allocations, including disabled ledgers', async () => {
+    const accounts = useLocalAccounts(); await accounts.initialize()
+    const demo = useDemoStore(); demo.initialize()
+    const data = demo.getProject('gios-torino-restoration')!
+    const project = data.project
+    const input = { projectId: project.id, name: project.name, slug: project.slug, subtitle: project.subtitle, description: project.description,
+      startedStory: project.started_story, motivationStory: project.motivation_story, objectStory: project.object_story, isCompleted: false,
+      isPublic: true, itemsEnabled: true, costsEnabled: false, currencyCode: 'USD', theme: project.theme_config,
+      currentPhaseKey: project.current_phase_id, phases: data.phases.map(phase => ({ key: phase.id, id: phase.id, name: phase.name, archived: false })), heroImage: null }
+    demo.updateProject(input)
+    expect(project.currency_code).toBe('USD')
+    demo.setItemAllocation(project.id, 'gios-project-item-bike', 0)
+    demo.updateProject({ ...input, itemsEnabled: false })
+    expect(() => demo.updateProject({ ...input, itemsEnabled: false, currencyCode: 'EUR' })).toThrow('cannot change')
+    expect(project.currency_code).toBe('USD')
+  })
   it('upgrades existing flat demo notes without losing text or edit dates', async () => {
     const accounts = useLocalAccounts(); await accounts.initialize()
     const saved = JSON.parse(JSON.stringify(createDemoDatabase()))

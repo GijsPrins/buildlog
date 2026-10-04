@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { collectPages } from '~/utils/workshopFinancials'
+import { checkedData, saveWorkshopLog } from '~/utils/workshopSaves'
 import type { ImageRole, Project, ProjectItemDetail, ProjectItemStatus, ProjectMembership, ProjectPhase } from '~/types/domain'
 
 definePageMeta({ middleware: 'auth' })
@@ -26,6 +28,8 @@ const summary = ref('')
 const content = ref('')
 const observations = ref<Array<{ finding: string; decision: string }>>([{ finding: '', decision: '' }])
 const { photos, files, selectFiles, removeFile } = useLogPhotos()
+const logId = ref('')
+const stableLogSlug = ref('')
 const busy = ref(false)
 const loading = ref(true)
 const errorMessage = ref('')
@@ -41,6 +45,7 @@ const durationLabel = computed(() => {
 const projectStyle = computed(() => projectThemeStyle(project.value?.theme_config))
 
 async function loadProject() {
+  loading.value = true; canEdit.value = false; errorMessage.value = ''
   if (demoMode.value) {
     await useLocalAccounts().initialize()
     demo.initialize()
@@ -56,43 +61,29 @@ async function loadProject() {
     phaseId.value = data.project.current_phase_id || data.phases[0]?.id || ''
     canEdit.value = useLocalAccounts().canWrite(data.project.id)
     loading.value = false
+    restoreDraft()
     return
   }
 
-  const supabase = useSupabase()
-  if (!supabase) return
-
-  const { data: userData } = await supabase.auth.getUser()
-  const { data: projectData, error } = await supabase
-    .from('projects')
-    .select('*')
-    .eq('slug', slug.value)
-    .maybeSingle()
-
-  if (error || !projectData || !userData.user) {
-    errorMessage.value = error?.message || 'Project unavailable.'
-    loading.value = false
-    return
-  }
-
-  project.value = projectData as Project
-  const [{ data: phaseData }, { data: membershipData }] = await Promise.all([
-    supabase.from('project_phases').select('*').eq('project_id', project.value.id).is('archived_at', null).order('sort_order'),
-    supabase.from('project_members').select('project_id,user_id,role')
-      .eq('project_id', project.value.id).eq('user_id', userData.user.id).maybeSingle()
-  ])
-
-  phases.value = (phaseData ?? []) as ProjectPhase[]
-  phaseId.value = project.value.current_phase_id || phases.value[0]?.id || ''
-  const membership = membershipData as ProjectMembership | null
-  canEdit.value = membership?.role === 'owner' || membership?.role === 'contributor'
-  if (project.value.items_enabled) {
-    const { data: itemData } = await supabase
-      .from('project_items').select('*,item:items(*)').eq('project_id', project.value.id).order('role')
-    projectItems.value = (itemData ?? []) as ProjectItemDetail[]
-  }
-  if (!canEdit.value) errorMessage.value = 'You have read-only access to this Project.'
-  loading.value = false
+  try {
+    const supabase = useSupabase()!
+    const { data: userData, error: authError } = await supabase.auth.getUser()
+    if (authError || !userData.user) throw new Error('Your session expired. Sign in again.')
+    const data = checkedData(await supabase.from('projects').select('*').eq('slug', slug.value).maybeSingle()) as Project | null
+    if (!data) throw new Error('Project unavailable.')
+    const [phaseData, membershipData, itemData] = await Promise.all([
+      collectPages<ProjectPhase>((from, to) => supabase.from('project_phases').select('*', { count: 'exact' }).eq('project_id', data.id).is('archived_at', null).order('sort_order').order('id').range(from, to)),
+      supabase.from('project_members').select('project_id,user_id,role').eq('project_id', data.id).eq('user_id', userData.user.id).maybeSingle(),
+      data.items_enabled ? collectPages<ProjectItemDetail>((from, to) => supabase.from('project_items').select('*,item:items(*)', { count: 'exact' }).eq('project_id', data.id).order('id').range(from, to)) : Promise.resolve([])
+    ])
+    const member = checkedData(membershipData) as ProjectMembership | null
+    project.value = data; phases.value = phaseData; projectItems.value = itemData
+    phaseId.value = data.current_phase_id || phaseData[0]?.id || ''
+    canEdit.value = member?.role === 'owner' || member?.role === 'contributor'
+    if (!canEdit.value) errorMessage.value = 'You have read-only access to this Project.'
+  } catch (cause) { canEdit.value = false; errorMessage.value = cause instanceof Error ? cause.message : 'Could not load the complete project. Please retry.' }
+  finally { loading.value = false }
+  if (canEdit.value) restoreDraft()
 }
 
 function fileAsDataUrl(file: File) {
@@ -134,136 +125,31 @@ async function saveDemoLog() {
   })
 }
 
-async function uploadOriginals(logId: string, userId: string) {
-  const supabase = useSupabase()
-  if (!supabase || !project.value) return
-
-  for (const [index, file] of files.value.entries()) {
-    uploadProgress.value[index] = `Reserving ${file.name}…`
-    const { data: image, error: reservationError } = await supabase
-      .from('project_images')
-      .insert({
-        project_id: project.value.id,
-        log_id: logId,
-        original_file_name: file.name,
-        media_type: file.type || 'image/jpeg',
-        byte_size: file.size,
-        role: photos.value[index]!.role,
-        caption: photos.value[index]!.caption.trim() || null,
-        sort_order: index,
-        upload_status: 'reserved',
-        uploaded_by_user_id: userId
-      })
-      .select('id,storage_path')
-      .single()
-
-    if (reservationError || !image) {
-      throw reservationError || new Error(`Could not reserve ${file.name}`)
-    }
-
-    uploadProgress.value[index] = `Uploading original ${file.name}…`
-    const { error: uploadError } = await supabase.storage
-      .from('project-originals')
-      .upload(image.storage_path, file, {
-        contentType: file.type || 'image/jpeg',
-        upsert: false
-      })
-
-    if (uploadError) {
-      await supabase.from('project_images').update({ upload_status: 'failed' }).eq('id', image.id)
-      throw uploadError
-    }
-
-    const { error: readyError } = await supabase
-      .from('project_images')
-      .update({ upload_status: 'ready' })
-      .eq('id', image.id)
-
-    if (readyError) throw readyError
-    uploadProgress.value[index] = `Uploaded ${file.name}`
-  }
-}
-
 async function submit() {
-  if (demoMode.value) {
-    busy.value = true
-    errorMessage.value = ''
-    uploadProgress.value = []
-    try {
-      await saveDemoLog()
-      discardDraft.value = true
-      await navigateTo(`/projects/${slug.value}`)
-    } catch (error) {
-      errorMessage.value = error instanceof Error ? error.message : 'The demo log could not be saved.'
-      busy.value = false
-    }
-    return
-  }
-
-  const supabase = useSupabase()
-  if (!supabase || !project.value || !canEdit.value) return
-
-  busy.value = true
-  errorMessage.value = ''
-  uploadProgress.value = []
-
-  const { data: userData } = await supabase.auth.getUser()
-  if (!userData.user) {
-    errorMessage.value = 'Your session expired. Please sign in again.'
-    busy.value = false
-    return
-  }
-
-  const duration = Math.max(0, (durationHours.value ?? 0) * 60 + (durationMinutes.value ?? 0)) || null
-  const findingDecisions = normalizeFindings(observations.value)
-  const logSlug = `${slugify(title.value)}-${workDate.value}-${crypto.randomUUID().slice(0, 6)}`
-
-  const { data: log, error } = await supabase
-    .from('logs')
-    .insert({
-      project_id: project.value.id,
-      phase_id: phaseId.value || null,
-      slug: logSlug,
-      title: title.value.trim(),
-      work_date: workDate.value,
-      duration_minutes: duration,
-      summary: summary.value.trim(),
-      content: content.value.trim(),
-      finding_decisions: findingDecisions,
-      created_by_user_id: userData.user.id
-    })
-    .select('id')
-    .single()
-
-  if (error || !log) {
-    errorMessage.value = error?.message || 'The Log could not be saved.'
-    busy.value = false
-    return
-  }
-
+  if (busy.value || loading.value || !project.value || !canEdit.value) return
+  busy.value = true; errorMessage.value = ''; uploadProgress.value = []
   try {
-    const usageRows = projectItems.value.filter(entry => selectedItems.value[entry.id]).map(entry => ({
-      project_id: project.value!.id, log_id: log.id, project_item_id: entry.id,
-      usage_amount: optionalAmount(itemAmounts.value[entry.id]), usage_cost: project.value?.cost_tracking_enabled ? optionalAmount(itemCosts.value[entry.id]) : null, note: itemNotes.value[entry.id]?.trim() || null
-    }))
-    if (usageRows.length) {
-      const { error: usageError } = await supabase.from('log_item_usage').insert(usageRows)
-      if (usageError) throw usageError
+    if (demoMode.value) await saveDemoLog()
+    else {
+      logId.value ||= crypto.randomUUID()
+      stableLogSlug.value ||= `${slugify(title.value)}-${workDate.value}-${logId.value.slice(0, 8)}`
+      const duration = Math.max(0, (durationHours.value ?? 0) * 60 + (durationMinutes.value ?? 0)) || null
+      await saveWorkshopLog(useSupabase()!, {
+        log: { id: logId.value, create: true, project_id: project.value.id, phase_id: phaseId.value || null,
+          slug: stableLogSlug.value, title: title.value.trim(), work_date: workDate.value, duration_minutes: duration,
+          summary: summary.value.trim(), content: content.value.trim(), finding_decisions: normalizeFindings(observations.value) },
+        usage: project.value.items_enabled ? projectItems.value.filter(entry => selectedItems.value[entry.id]).map(entry => ({
+          project_item_id: entry.id, usage_amount: optionalAmount(itemAmounts.value[entry.id]),
+          usage_cost: project.value!.cost_tracking_enabled ? optionalAmount(itemCosts.value[entry.id]) : null,
+          note: itemNotes.value[entry.id]?.trim() || null, status_after: itemStatuses.value[entry.id] || null
+        })) : null,
+        imageEdits: [], photos: photos.value
+      }, (index, text) => { uploadProgress.value[index] = text })
     }
-    for (const entry of projectItems.value.filter(item => selectedItems.value[item.id] && itemStatuses.value[item.id])) {
-      const { error: statusError } = await supabase.from('project_items')
-        .update({ status: itemStatuses.value[entry.id] }).eq('id', entry.id).eq('project_id', project.value.id)
-      if (statusError) throw statusError
-    }
-    await uploadOriginals(log.id, userData.user.id)
     discardDraft.value = true
-    await navigateTo(`/projects/${project.value.slug}`)
-  } catch (uploadError) {
-    errorMessage.value = uploadError instanceof Error
-      ? `The Log was saved, but a photo failed: ${uploadError.message}`
-      : 'The Log was saved, but a photo failed to upload.'
-    busy.value = false
-  }
+    await navigateTo(`/projects/${slug.value}`)
+  } catch (cause) { errorMessage.value = cause instanceof Error ? cause.message : 'The session could not be saved. Retry safely.' }
+  finally { busy.value = false }
 }
 
 function draftStore() {
@@ -274,28 +160,32 @@ onBeforeRouteLeave(() => {
   if (!draftOwner.value) return
   if (discardDraft.value || auth.user.value?.id !== draftOwner.value) { draftStore().clear(); return }
   draftStore().save({
-    title: title.value, phaseId: phaseId.value, workDate: workDate.value,
+    logId: logId.value, logSlug: stableLogSlug.value, title: title.value, phaseId: phaseId.value, workDate: workDate.value,
     durationHours: durationHours.value, durationMinutes: durationMinutes.value,
     summary: summary.value, content: content.value, finding: '', decision: '', findingDecisions: observations.value.map(entry => ({ ...entry })),
     selectedItems: { ...selectedItems.value }, itemAmounts: { ...itemAmounts.value }, itemCosts: { ...itemCosts.value },
     itemNotes: { ...itemNotes.value }, itemStatuses: { ...itemStatuses.value },
-    photos: photos.value.map(({ file, caption, role }) => ({ file, caption, role }))
+    photos: photos.value.map(({ id, file, caption, role }) => ({ id, file, caption, role }))
   })
 })
 
-onMounted(async () => {
-  await auth.initialize()
-  draftOwner.value = auth.user.value?.id || ''
-  await loadProject()
+function restoreDraft() {
   if (!draftOwner.value || !canEdit.value) return
   const draft = draftStore().take()
   if (!draft) return
+  logId.value = draft.logId || ''; stableLogSlug.value = draft.logSlug || ''
   title.value = draft.title; phaseId.value = draft.phaseId; workDate.value = draft.workDate
   durationHours.value = draft.durationHours; durationMinutes.value = draft.durationMinutes
   summary.value = draft.summary; content.value = draft.content; observations.value = draft.findingDecisions?.map(entry => ({ ...entry })) || [{ finding: draft.finding, decision: draft.decision }]
   selectedItems.value = draft.selectedItems; itemAmounts.value = draft.itemAmounts; itemCosts.value = draft.itemCosts ?? {}
   itemNotes.value = draft.itemNotes; itemStatuses.value = draft.itemStatuses
-  photos.value = draft.photos.map(photo => ({ ...photo, preview: URL.createObjectURL(photo.file) }))
+  photos.value = draft.photos.map(photo => ({ ...photo, id: photo.id || crypto.randomUUID(), preview: URL.createObjectURL(photo.file) }))
+}
+
+onMounted(async () => {
+  await auth.initialize()
+  draftOwner.value = auth.user.value?.id || ''
+  await loadProject()
 })
 </script>
 
@@ -304,7 +194,7 @@ onMounted(async () => {
   <div v-else class="session-builder" :style="projectStyle">
     <div v-if="!canEdit" class="empty-state">
       <h2>Read-only Project</h2>
-      <p>{{ errorMessage }}</p>
+      <p>{{ errorMessage }}</p><button type="button" class="button button--ghost" @click="loadProject">Try again</button>
       <NuxtLink class="button" :to="`/projects/${slug}`">Back to the Project</NuxtLink>
     </div>
 

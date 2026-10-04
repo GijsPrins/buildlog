@@ -30,13 +30,28 @@ export function workshopFinancials(items: Item[], links: Pick<ProjectItem, 'item
 /** Read every page: Supabase's default row limit must not truncate totals. */
 export async function collectPages<T>(fetchPage: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null; count?: number | null }>, pageSize = 500): Promise<T[]> {
   const rows: T[] = []
+  let expectedCount: number | undefined
   for (let offset = 0; ;) {
     const { data, error, count } = await fetchPage(offset, offset + pageSize - 1)
     if (error) throw new Error(error.message)
+    if (!data) throw new Error('Records could not be loaded. Please retry.')
+    if (count != null) {
+      if (expectedCount !== undefined && expectedCount !== count) throw new Error('Records changed while loading. Please retry.')
+      expectedCount = count
+    }
     rows.push(...(data ?? []))
-    if (!data?.length || (count != null ? rows.length >= count : data.length < pageSize)) return rows
+    if (!data?.length || (count != null ? rows.length >= count : data.length < pageSize)) {
+      if (expectedCount !== undefined && rows.length !== expectedCount) throw new Error('Not all records could be loaded. Please retry.')
+      return rows
+    }
     offset += data.length
   }
+}
+
+export async function collectInBatches<T>(ids: string[], fetchBatch: (ids: string[]) => Promise<T[]>): Promise<T[]> {
+  const rows: T[] = []
+  for (let offset = 0; offset < ids.length; offset += 100) rows.push(...await fetchBatch(ids.slice(offset, offset + 100)))
+  return rows
 }
 
 export function formatPurchaseAmount(amount: number, currency: string) {

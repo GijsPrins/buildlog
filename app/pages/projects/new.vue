@@ -165,9 +165,9 @@ async function submit() {
     } else {
       const selectedIndex = usablePhases.findIndex(phase => phase.key === currentPhaseKey.value)
       if (selectedIndex > 0) {
-        const { data: createdPhases, error: phaseError } = await supabase.from('project_phases').select('id').eq('project_id', data).order('sort_order')
+        const { data: selectedPhase, error: phaseError } = await supabase.from('project_phases').select('id').eq('project_id', data).eq('sort_order', selectedIndex).single()
         if (phaseError) { errorMessage.value = `Project created, but its current phase could not be set: ${phaseError.message}`; busy.value = false; return }
-        const selectedPhaseId = createdPhases?.[selectedIndex]?.id
+        const selectedPhaseId = selectedPhase?.id
         if (selectedPhaseId) {
           const { error: currentPhaseError } = await supabase.from('projects').update({ current_phase_id: selectedPhaseId }).eq('id', data)
           if (currentPhaseError) { errorMessage.value = `Project created, but its current phase could not be set: ${currentPhaseError.message}`; busy.value = false; return }

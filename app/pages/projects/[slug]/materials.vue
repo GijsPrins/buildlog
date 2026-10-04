@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { collectPages } from '~/utils/workshopFinancials'
+import { checkedData } from '~/utils/workshopSaves'
 import type { Item, Project, ProjectItemDetail, ProjectItemRole, ProjectItemStatus, ProjectMembership } from '~/types/domain'
 
 definePageMeta({ middleware: 'auth' })
@@ -48,54 +50,55 @@ const statusOptions: ProjectItemStatus[] = ['planned', 'ordered', 'available', '
 const projectStyle = computed(() => projectThemeStyle(project.value?.theme_config))
 
 async function loadMaterials() {
-  errorMessage.value = ''
-  if (demoMode.value) {
-    await useLocalAccounts().initialize()
-    demo.initialize()
-    userId.value = useLocalAccounts().current.value?.id || ''
-    ownedItems.value = demo.ownedItems()
-    const data = demo.getProject(slug.value)
-    if (!data) errorMessage.value = 'Project not found in this browser.'
-    else {
-      project.value = data.project
-      projectItems.value = data.projectItems
-      canEdit.value = useLocalAccounts().canWrite(data.project.id)
-      if (!data.project.items_enabled) errorMessage.value = 'The parts ledger is not enabled for this project.'
+  loading.value = true; canEdit.value = false
+  try {
+    errorMessage.value = ''
+    if (demoMode.value) {
+      await useLocalAccounts().initialize()
+      demo.initialize()
+      userId.value = useLocalAccounts().current.value?.id || ''
+      ownedItems.value = demo.ownedItems()
+      const data = demo.getProject(slug.value)
+      if (!data) errorMessage.value = 'Project not found in this browser.'
+      else {
+        project.value = data.project
+        projectItems.value = data.projectItems
+        canEdit.value = useLocalAccounts().canWrite(data.project.id)
+        if (!data.project.items_enabled) errorMessage.value = 'The parts ledger is not enabled for this project.'
+      }
+      loading.value = false
+      return
     }
-    loading.value = false
-    return
-  }
 
-  const supabase = useSupabase()
-  if (!supabase) return
-  const [{ data: projectData, error }, { data: userData }] = await Promise.all([
-    supabase.from('projects').select('*').eq('slug', slug.value).maybeSingle(),
-    supabase.auth.getUser()
-  ])
-  if (error || !projectData || !userData.user) {
-    errorMessage.value = error?.message || 'Project unavailable.'
-    loading.value = false
-    return
-  }
-  userId.value = userData.user.id
-  const { data: owned, error: ownedError } = await supabase.from('items').select('*').eq('owner_user_id', userData.user.id).order('name')
-  if (ownedError) { errorMessage.value = ownedError.message; loading.value = false; return }
-  ownedItems.value = (owned ?? []) as Item[]
-  project.value = projectData as Project
-  if (!project.value.items_enabled) {
-    errorMessage.value = 'The parts ledger is not enabled for this project.'
-    loading.value = false
-    return
-  }
-  const [{ data: membershipData }, { data: itemData, error: itemError }] = await Promise.all([
-    supabase.from('project_members').select('project_id,user_id,role').eq('project_id', project.value.id).eq('user_id', userData.user.id).maybeSingle(),
-    supabase.from('project_items').select('*,item:items(*)').eq('project_id', project.value.id).order('role')
-  ])
-  const membership = membershipData as ProjectMembership | null
-  canEdit.value = membership?.role === 'owner' || membership?.role === 'contributor'
-  projectItems.value = (itemData ?? []) as ProjectItemDetail[]
-  if (itemError) errorMessage.value = itemError.message
-  loading.value = false
+    const supabase = useSupabase()
+    if (!supabase) return
+    const [{ data: projectData, error }, { data: userData }] = await Promise.all([
+      supabase.from('projects').select('*').eq('slug', slug.value).maybeSingle(),
+      supabase.auth.getUser()
+    ])
+    if (error || !projectData || !userData.user) {
+      errorMessage.value = error?.message || 'Project unavailable.'
+      loading.value = false
+      return
+    }
+    userId.value = userData.user.id
+    const owned = await collectPages<Item>((from, to) => supabase.from('items').select('*', { count: 'exact' }).eq('owner_user_id', userData.user!.id).order('name').order('id').range(from, to))
+    ownedItems.value = (owned ?? []) as Item[]
+    project.value = projectData as Project
+    if (!project.value.items_enabled) {
+      errorMessage.value = 'The parts ledger is not enabled for this project.'
+      loading.value = false
+      return
+    }
+    const [membershipResult, itemData] = await Promise.all([
+      supabase.from('project_members').select('project_id,user_id,role').eq('project_id', project.value.id).eq('user_id', userData.user.id).maybeSingle(),
+      collectPages<ProjectItemDetail>((from, to) => supabase.from('project_items').select('*,item:items(*)', { count: 'exact' }).eq('project_id', project.value!.id).order('role').order('id').range(from, to))
+    ])
+    const membership = checkedData(membershipResult) as ProjectMembership | null
+    canEdit.value = membership?.role === 'owner' || membership?.role === 'contributor'
+    projectItems.value = (itemData ?? []) as ProjectItemDetail[]
+  } catch (cause) { canEdit.value = false; project.value = null; errorMessage.value = cause instanceof Error ? cause.message : 'Could not load all materials.' }
+  finally { loading.value = false }
 }
 
 function clearForm() {

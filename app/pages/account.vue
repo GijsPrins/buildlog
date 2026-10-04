@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { collectPages } from '~/utils/workshopFinancials'
 definePageMeta({ middleware: 'auth' })
 const accounts = useLocalAccounts()
 const demo = useDemoStore()
@@ -17,9 +18,10 @@ const owned = computed(() => demoMode.value ? accounts.state.value.members.filte
 onMounted(async () => {
   await initialize()
   if (demoMode.value) { await accounts.initialize(); demo.initialize(); return }
-  const { data, error: loadError } = await useSupabase()!.from('project_members').select('project_id,project:projects(name)').eq('user_id', user.value!.id).eq('role', 'owner')
-  if (loadError) error.value = loadError.message
-  else liveOwned.value = (data || []).map((entry: any) => ({ projectId: entry.project_id, project: entry.project }))
+  try {
+    const data = await collectPages<{ project_id: string; project: { name: string } }>((from, to) => useSupabase()!.from('project_members').select('project_id,project:projects(name)', { count: 'exact' }).eq('user_id', user.value!.id).eq('role', 'owner').order('project_id').range(from, to).returns<Array<{ project_id: string; project: { name: string } }>>())
+    liveOwned.value = data.map(entry => ({ projectId: entry.project_id, project: entry.project }))
+  } catch (cause) { error.value = cause instanceof Error ? cause.message : 'Could not load all owned projects.' }
 })
 async function removeAccount() {
   error.value = ''; busy.value = true

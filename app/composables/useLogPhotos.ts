@@ -1,13 +1,13 @@
 import type { ImageRole } from '~/types/domain'
 
 export function useLogPhotos() {
-  const photos = ref<Array<{ file: File; preview: string; caption: string; role: ImageRole }>>([])
+  const photos = ref<Array<{ id: string; file: File; preview: string; caption: string; role: ImageRole }>>([])
   const files = computed(() => photos.value.map(photo => photo.file))
   function selectFiles(event: Event) {
     const input = event.target as HTMLInputElement
     for (const file of Array.from(input.files ?? [])) {
       if (photos.value.some(photo => photo.file.name === file.name && photo.file.size === file.size && photo.file.lastModified === file.lastModified)) continue
-      photos.value.push({ file, preview: URL.createObjectURL(file), caption: '', role: 'gallery' })
+      photos.value.push({ id: crypto.randomUUID(), file, preview: URL.createObjectURL(file), caption: '', role: 'gallery' })
     }
     input.value = ''
   }
