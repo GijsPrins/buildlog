@@ -17,6 +17,26 @@ beforeEach(() => {
 })
 
 describe('local workshop accounts', () => {
+  it('persists flexible specifications and protects private dossiers', async () => {
+    const accounts = useLocalAccounts(); await accounts.initialize()
+    const demo = useDemoStore(); demo.initialize()
+    const project = demo.listProjects().find(entry => !entry.is_public) || demo.listProjects()[0]!
+    const fact = { section: ' Roof ', label: ' Material ', value: ' Slate ', notes: ' Original ', source: 'Inspection', sort_order: 2 }
+    demo.saveSpecification(project.id, null, fact)
+    const saved = demo.listSpecifications(project.id)[0]!
+    expect(saved).toMatchObject({ section: 'Roof', label: 'Material', value: 'Slate', sort_order: 2 })
+    demo.saveSpecification(project.id, saved.id, { ...fact, value: 'Reclaimed slate' })
+    expect(demo.listSpecifications(project.id)[0]?.value).toBe('Reclaimed slate')
+    const persisted = JSON.parse(localStorage.getItem('buildlog-demo-v5')!)
+    expect(persisted.specifications).toHaveLength(1)
+    await accounts.register('Other', 'spec-reader@example.test', 'Workshop2026!')
+    expect(() => demo.saveSpecification(project.id, saved.id, fact)).toThrow('permission')
+    expect(() => demo.deleteSpecification(project.id, saved.id)).toThrow('permission')
+    if (!project.is_public) expect(demo.listSpecifications(project.id)).toEqual([])
+    await accounts.signIn('builder@buildlog.local', 'Workshop2026!')
+    demo.deleteSpecification(project.id, saved.id)
+    expect(demo.listSpecifications(project.id)).toEqual([])
+  })
   it('reuses owned items, edits shared details and keeps removed entries and history', async () => {
     const accounts = useLocalAccounts(); await accounts.initialize()
     const demo = useDemoStore(); demo.initialize()

@@ -1,5 +1,16 @@
 export type ProjectRole = 'owner' | 'contributor' | 'reader'
 
+export interface ProjectSpec {
+  id: string
+  project_id: string
+  section: string
+  label: string
+  value: string
+  notes: string | null
+  source: string | null
+  sort_order: number
+}
+
 export type ImageRole =
   | 'before'
   | 'after'

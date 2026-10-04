@@ -1,8 +1,11 @@
-import type { ImageRole, Item, LogItemUsage, LogItemUsageDetail, Project, ProjectImage, ProjectItem, ProjectItemDetail, ProjectItemRole, ProjectItemStatus, ProjectLog, ProjectPhase, ProjectSummary, ThemeConfig } from '~/types/domain'
+import type { ImageRole, ProjectSpec, Item, LogItemUsage, LogItemUsageDetail, Project, ProjectImage, ProjectItem, ProjectItemDetail, ProjectItemRole, ProjectItemStatus, ProjectLog, ProjectPhase, ProjectSummary, ThemeConfig } from '~/types/domain'
+
+import { normalizeSpecification } from '../utils/specifications'
 
 const STORAGE_KEY = 'buildlog-demo-v5'
 
 interface DemoDatabase {
+  specifications?: ProjectSpec[]
   projects: Project[]
   phases: ProjectPhase[]
   logs: ProjectLog[]
@@ -387,6 +390,30 @@ export function useDemoStore() {
     return { ...projectItem, item }
   }
 
+  function listSpecifications(projectId: string) {
+    const project = database.value.projects.find(entry => entry.id === projectId)
+    if (!project || (!project.is_public && !accounts.role(projectId))) return []
+    return (database.value.specifications ?? []).filter(entry => entry.project_id === projectId).map(entry => ({ ...entry }))
+  }
+
+  function saveSpecification(projectId: string, id: string | null, input: Omit<ProjectSpec, 'id' | 'project_id'>) {
+    accounts.requireRole(projectId)
+    const changes = normalizeSpecification(input)
+    database.value.specifications ??= []
+    if (id) {
+      const spec = database.value.specifications.find(entry => entry.id === id && entry.project_id === projectId)
+      if (!spec) throw new Error('Specification unavailable.')
+      Object.assign(spec, changes)
+    } else database.value.specifications.push({ ...changes, id: crypto.randomUUID(), project_id: projectId })
+    persist()
+  }
+
+  function deleteSpecification(projectId: string, id: string) {
+    accounts.requireRole(projectId)
+    database.value.specifications = (database.value.specifications ?? []).filter(entry => entry.project_id !== projectId || entry.id !== id)
+    persist()
+  }
+
   function ownedItems() {
     return database.value.items.filter(item => item.owner_user_id === accounts.current.value?.id)
   }
@@ -592,6 +619,7 @@ export function useDemoStore() {
     const userId = accounts.current.value?.id
     const ownedIds = accounts.deleteAccount(transfers, deleteProjects)
     const deleted = new Set(deleteProjects ? ownedIds : [])
+    database.value.specifications = (database.value.specifications ?? []).filter(entry => !deleted.has(entry.project_id))
     database.value.projects = database.value.projects.filter(project => !deleted.has(project.id))
     database.value.phases = database.value.phases.filter(phase => !deleted.has(phase.project_id))
     database.value.logs = database.value.logs.filter(log => !deleted.has(log.project_id)).map(log => log.created_by_user_id === userId ? { ...log, created_by_user_id: null } : log)
@@ -603,5 +631,5 @@ export function useDemoStore() {
     persist()
   }
 
-  return { ownedItems, linkOwnedItem, editLedgerEntry, editOwnedItem, deleteLocalAccount, initialize, listProjects, getProject, getLog, listProjectItems, listProjectLogUsage, createProject, updateProject, setItemAllocation, addProjectItem, addLog, updateLog, reset }
+  return { listSpecifications, saveSpecification, deleteSpecification, ownedItems, linkOwnedItem, editLedgerEntry, editOwnedItem, deleteLocalAccount, initialize, listProjects, getProject, getLog, listProjectItems, listProjectLogUsage, createProject, updateProject, setItemAllocation, addProjectItem, addLog, updateLog, reset }
 }

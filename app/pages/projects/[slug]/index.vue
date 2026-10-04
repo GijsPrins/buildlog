@@ -185,6 +185,7 @@ onMounted(loadProject)
           <p class="project-work-order__intro">{{ project.subtitle || project.description }}</p>
           <div class="project-work-order__actions">
             <NuxtLink v-if="canEdit" class="button" :to="`/projects/${project.slug}/logs/new`">+ Quick workshop log</NuxtLink>
+            <NuxtLink class="button button--ghost" :to="`/projects/${project.slug}/specs`">Specifications</NuxtLink>
             <NuxtLink v-if="isOwner" class="button button--ghost project-work-order__edit" :to="`/projects/${project.slug}/edit`">Edit project</NuxtLink>
             <a class="project-work-order__jump" href="#build-log">View workshop sessions ↓</a>
           </div>

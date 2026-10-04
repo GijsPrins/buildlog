@@ -21,7 +21,7 @@ The live migration is additive. Database verification uses temporary fixture acc
 - [x] Existing owned-item selection and reuse across projects without duplicating purchases.
 - [x] Removal via an explicit `removed` status, preserving ledger links and log history. Permanent unlink/delete is not exposed.
 - [ ] Workshop-wide deduplicated expenditure, currency-grouped totals and full estimate editing.
-- [ ] Project specifications dossier and Bicycle Restoration suggested fields.
+- [x] Project specifications dossier: generic sections, facts, notes, sources, ordering, editor permissions and optional Bicycle Restoration suggestions.
 - [ ] Ordinary ownership-transfer UI and log deletion.
 - [ ] Multiple editable finding/decision pairs and visible log authorship.
 - [ ] Generic completion state instead of interpreting phase names.
