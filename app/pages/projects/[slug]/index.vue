@@ -22,6 +22,7 @@ const projectItems = ref<ProjectItemDetail[]>([])
 const logItemUsage = ref<LogItemUsageDetail[]>([])
 const demoMode = useDemoMode()
 const demo = useDemoStore()
+const { loadAuthors, authorName } = useLogAuthors()
 
 const canEdit = computed(() => membership.value?.role === 'owner' || membership.value?.role === 'contributor')
 const isOwner = computed(() => membership.value?.role === 'owner')
@@ -88,6 +89,7 @@ async function loadProject() {
     project.value = data.project
     phases.value = data.phases
     logs.value = data.logs
+    await loadAuthors(data.logs)
     images.value = data.images
     projectItems.value = data.projectItems
     logItemUsage.value = data.logItemUsage
@@ -129,6 +131,7 @@ async function loadProject() {
 
   phases.value = (phaseData ?? []) as ProjectPhase[]
   logs.value = (logData ?? []) as ProjectLog[]
+  await loadAuthors(logs.value)
   const baseImages = (imageData ?? []) as ProjectImage[]
 
   images.value = await Promise.all(baseImages.map(async image => {
@@ -292,6 +295,7 @@ onMounted(loadProject)
 
       <div v-if="logs.length" class="timeline project-timeline">
         <LogCard
+          :author-name="authorName(log)"
           v-for="log in logs"
           :key="log.id"
           :log="log"

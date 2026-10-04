@@ -24,8 +24,7 @@ const durationHours = ref<number | null>(null)
 const durationMinutes = ref<number | null>(null)
 const summary = ref('')
 const content = ref('')
-const finding = ref('')
-const decision = ref('')
+const observations = ref<Array<{ finding: string; decision: string }>>([{ finding: '', decision: '' }])
 const { photos, files, selectFiles, removeFile } = useLogPhotos()
 const busy = ref(false)
 const loading = ref(true)
@@ -134,9 +133,7 @@ async function saveDemoLog() {
     durationMinutes: duration,
     summary: summary.value.trim(),
     content: content.value.trim(),
-    findingDecisions: finding.value.trim() || decision.value.trim()
-      ? [{ finding: finding.value.trim(), decision: decision.value.trim() }]
-      : [],
+    findingDecisions: normalizeFindings(observations.value),
     imageRole: 'gallery',
     images: demoImages,
     itemUsage: projectItems.value.filter(entry => selectedItems.value[entry.id]).map(entry => ({
@@ -227,9 +224,7 @@ async function submit() {
   }
 
   const duration = Math.max(0, (durationHours.value ?? 0) * 60 + (durationMinutes.value ?? 0)) || null
-  const findingDecisions = finding.value.trim() || decision.value.trim()
-    ? [{ finding: finding.value.trim(), decision: decision.value.trim() }]
-    : []
+  const findingDecisions = normalizeFindings(observations.value)
   const logSlug = `${slugify(title.value)}-${workDate.value}-${crypto.randomUUID().slice(0, 6)}`
 
   const { data: log, error } = await supabase
@@ -290,7 +285,7 @@ onBeforeRouteLeave(() => {
   draftStore().save({
     title: title.value, phaseId: phaseId.value, workDate: workDate.value,
     durationHours: durationHours.value, durationMinutes: durationMinutes.value,
-    summary: summary.value, content: content.value, finding: finding.value, decision: decision.value,
+    summary: summary.value, content: content.value, finding: '', decision: '', findingDecisions: observations.value.map(entry => ({ ...entry })),
     selectedItems: { ...selectedItems.value }, itemAmounts: { ...itemAmounts.value }, itemCosts: { ...itemCosts.value },
     itemNotes: { ...itemNotes.value }, itemStatuses: { ...itemStatuses.value },
     photos: photos.value.map(({ file, caption, role }) => ({ file, caption, role }))
@@ -306,7 +301,7 @@ onMounted(async () => {
   if (!draft) return
   title.value = draft.title; phaseId.value = draft.phaseId; workDate.value = draft.workDate
   durationHours.value = draft.durationHours; durationMinutes.value = draft.durationMinutes
-  summary.value = draft.summary; content.value = draft.content; finding.value = draft.finding; decision.value = draft.decision
+  summary.value = draft.summary; content.value = draft.content; observations.value = draft.findingDecisions?.map(entry => ({ ...entry })) || [{ finding: draft.finding, decision: draft.decision }]
   selectedItems.value = draft.selectedItems; itemAmounts.value = draft.itemAmounts; itemCosts.value = draft.itemCosts ?? {}
   itemNotes.value = draft.itemNotes; itemStatuses.value = draft.itemStatuses
   photos.value = draft.photos.map(photo => ({ ...photo, preview: URL.createObjectURL(photo.file) }))
@@ -405,16 +400,7 @@ onMounted(async () => {
           <span>{{ project?.items_enabled ? '03' : '02' }}</span>
           <div><p class="eyebrow">Turn observation into progress</p><h2 id="session-decisions-title">Findings &amp; decisions</h2></div>
         </header>
-        <div class="session-decision-grid">
-          <div>
-            <label for="finding">What did you find?</label>
-            <textarea id="finding" v-model="finding" placeholder="A worn race, an unexpected marking, a better-than-expected finish…" />
-          </div>
-          <div>
-            <label for="decision">What will you do about it?</label>
-            <textarea id="decision" v-model="decision" placeholder="Reuse it, replace it, investigate further, or deliberately leave it alone…" />
-          </div>
-        </div>
+        <FindingDecisionEditor v-model="observations" :disabled="busy" />
       </section>
 
       <ul v-if="files.length && uploadProgress.length" class="upload-list session-upload-progress">

@@ -4,6 +4,7 @@ export interface LogDraft {
   title: string; phaseId: string; workDate: string
   durationHours: number | null; durationMinutes: number | null
   summary: string; content: string; finding: string; decision: string
+  findingDecisions?: Array<{ finding: string; decision: string }>
   selectedItems: Record<string, boolean>
   itemCosts?: Record<string, number | null>
   itemAmounts: Record<string, number | null>

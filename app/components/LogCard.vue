@@ -3,6 +3,7 @@ import type { LogItemUsageDetail, ProjectImage, ProjectLog } from '~/types/domai
 
 defineProps<{
   log: ProjectLog
+  authorName?: string
   phaseName?: string
   images?: Array<ProjectImage & { signedUrl?: string }>
   itemUsages?: LogItemUsageDetail[]
@@ -20,6 +21,7 @@ defineProps<{
       <div class="log-card__meta">
         <time :datetime="log.work_date">{{ formatProjectDate(log.work_date) }}</time>
         <span>{{ formatDuration(log.duration_minutes) }}</span>
+        <span>Recorded by {{ authorName || (log.created_by_user_id ? 'Workshop member' : 'Former member') }}</span>
       </div>
     </header>
 

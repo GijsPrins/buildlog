@@ -5,6 +5,7 @@ function draft(): LogDraft {
   return {
     title: 'Repair the wheel', phaseId: '', workDate: '2026-10-03', durationHours: 1, durationMinutes: 15,
     summary: 'Inspection', content: 'Keep these notes', finding: 'Worn bearing', decision: 'Replace it',
+    findingDecisions: [{ finding: 'Wear', decision: 'Replace' }, { finding: 'Marking', decision: 'Keep' }],
     selectedItems: { bearing: true }, itemAmounts: { bearing: 2 }, itemNotes: { bearing: 'Front' }, itemStatuses: { bearing: 'installed' },
     photos: [{ file: new File(['original bytes'], 'bearing.jpg', { type: 'image/jpeg' }), caption: 'Before repair', role: 'damage' }]
   }

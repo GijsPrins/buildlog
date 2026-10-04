@@ -40,8 +40,7 @@ const durationHours = ref<number | null>(null)
 const durationMinutes = ref<number | null>(null)
 const summary = ref('')
 const content = ref('')
-const finding = ref('')
-const decision = ref('')
+const observations = ref<Array<{ finding: string; decision: string }>>([{ finding: '', decision: '' }])
 const selectedItems = ref<Record<string, boolean>>({})
 const itemAmounts = ref<Record<string, number | null>>({})
 const itemCosts = ref<Record<string, number | null>>({})
@@ -52,6 +51,7 @@ const { photos, files, selectFiles, removeFile, clearPhotos } = useLogPhotos()
 const imageEdits = ref<Array<ProjectImage & { signedUrl?: string }>>([])
 const demoMode = useDemoMode()
 const demo = useDemoStore()
+const { loadAuthors, authorName } = useLogAuthors()
 
 const phaseName = computed(() => phases.value.find(entry => entry.id === log.value?.phase_id)?.name || 'Unassigned')
 const visibleImages = computed(() => images.value.filter(image => !removedImageIds.value.includes(image.id)))
@@ -71,7 +71,7 @@ function fillForm() {
   durationHours.value = log.value.duration_minutes ? Math.floor(log.value.duration_minutes / 60) : null
   durationMinutes.value = log.value.duration_minutes ? log.value.duration_minutes % 60 : null
   summary.value = log.value.summary; content.value = log.value.content
-  finding.value = log.value.finding_decisions?.[0]?.finding || ''; decision.value = log.value.finding_decisions?.[0]?.decision || ''
+  observations.value = log.value.finding_decisions?.length ? log.value.finding_decisions.map(entry => ({ ...entry })) : [{ finding: '', decision: '' }]
   selectedItems.value = {}; itemAmounts.value = {}; itemCosts.value = {}; itemNotes.value = {}; itemStatuses.value = {}
   for (const entry of usage.value) {
     selectedItems.value[entry.project_item_id] = true
@@ -94,6 +94,7 @@ async function loadDetail() {
     else {
       project.value = data.project; log.value = data.log; phases.value = data.phases
       images.value = data.images; projectItems.value = data.projectItems; usage.value = data.usage; canEdit.value = useLocalAccounts().canWrite(data.project.id)
+      await loadAuthors([data.log])
       fillForm()
     }
     loading.value = false
@@ -110,6 +111,7 @@ async function loadDetail() {
   const { data: logData, error: logError } = await supabase.from('logs').select('*').eq('project_id', project.value.id).eq('slug', logSlug.value).maybeSingle()
   if (logError || !logData) { errorMessage.value = logError?.message || 'Workshop session not found.'; loading.value = false; return }
   log.value = logData as ProjectLog
+  await loadAuthors([log.value])
   const requests = await Promise.all([
     supabase.from('project_phases').select('*').eq('project_id', project.value.id).is('archived_at', null).order('sort_order'),
     supabase.from('project_images').select('*').eq('log_id', log.value.id).eq('upload_status', 'ready').is('deleted_at', null).order('sort_order'),
@@ -162,8 +164,7 @@ async function save() {
   if (!project.value || !log.value || !canEdit.value) return
   busy.value = true; errorMessage.value = ''
   const duration = Math.max(0, (durationHours.value ?? 0) * 60 + (durationMinutes.value ?? 0)) || null
-  const primaryDecision = finding.value.trim() || decision.value.trim() ? [{ finding: finding.value.trim(), decision: decision.value.trim() }] : []
-  const findingDecisions = [...primaryDecision, ...(log.value.finding_decisions?.slice(1) ?? [])]
+  const findingDecisions = normalizeFindings(observations.value)
   try {
     if (demoMode.value) {
       const newImages = []
@@ -217,7 +218,7 @@ watch(() => route.query.edit, value => { editing.value = value === '1'; if (edit
 
     <template v-if="!editing">
       <header class="log-sheet__hero">
-        <div><p class="eyebrow">{{ phaseName }} // {{ formatProjectDate(log.work_date) }}</p><h1>{{ log.title }}</h1><p>{{ log.summary || 'No summary was written for this session.' }}</p><NuxtLink v-if="canEdit" class="button" :to="{ query: { edit: '1' } }">Edit work order</NuxtLink></div>
+        <div><p class="eyebrow">{{ phaseName }} // {{ formatProjectDate(log.work_date) }}</p><h1>{{ log.title }}</h1><p class="log-author">Recorded by {{ authorName(log) }}</p><p>{{ log.summary || 'No summary was written for this session.' }}</p><NuxtLink v-if="canEdit" class="button" :to="{ query: { edit: '1' } }">Edit work order</NuxtLink></div>
         <div class="log-sheet__stamp"><span>Bench time</span><strong>{{ formatDuration(log.duration_minutes) }}</strong><small>{{ usage.length }} {{ usage.length === 1 ? 'item' : 'items' }} issued</small></div>
       </header>
       <div v-if="images.length" class="log-sheet__photos"><figure v-for="image in images" :key="image.id"><img :src="image.signedUrl" :alt="image.caption || log.title"><figcaption>{{ image.caption || image.role }}</figcaption></figure></div>
@@ -236,7 +237,7 @@ watch(() => route.query.edit, value => { editing.value = value === '1'; if (edit
         <label class="field"><span>Minutes</span><input v-model.number="durationMinutes" type="number" min="0" max="59"></label>
         <label class="field field--full"><span>Summary</span><textarea v-model="summary" /></label>
         <label class="field field--full"><span>Workshop notes</span><textarea v-model="content" /></label>
-        <label class="field"><span>Finding</span><textarea v-model="finding" /></label><label class="field"><span>Decision</span><textarea v-model="decision" /></label>
+        <div class="field field--full"><h2>Findings &amp; decisions</h2><FindingDecisionEditor v-model="observations" :disabled="busy" /></div>
       </div>
       <section v-if="project.items_enabled" class="log-edit__parts"><h2>Parts used</h2><article v-for="entry in projectItems" :key="entry.id" :class="{ 'is-selected': selectedItems[entry.id] }"><label><input v-model="selectedItems[entry.id]" type="checkbox"><strong>{{ entry.item.name }}</strong><small>{{ entry.status || 'unmarked' }}</small></label><div v-if="selectedItems[entry.id]"><input v-model.number="itemAmounts[entry.id]" min="0" step="0.01" type="number" placeholder="Qty"><label v-if="project.cost_tracking_enabled">Usage cost ({{ project.currency_code }})<input v-model.number="itemCosts[entry.id]" min="0" step="0.01" type="number" placeholder="Not recorded"></label><input v-model="itemNotes[entry.id]" placeholder="Usage note"><select v-model="itemStatuses[entry.id]"><option value="">Keep status</option><option value="installed">Installed</option><option value="used">Used</option><option value="removed">Removed</option></select></div></article></section>
       <section class="log-photo-section">
